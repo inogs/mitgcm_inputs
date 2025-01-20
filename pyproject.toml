@@ -15,6 +15,10 @@ pre-commit = "^3.8.0"
 deptry = "^0.21.2"
 
 
+[tool.poetry.scripts]
+mitgcm_inputs = "mitgcm_inputs.__main__:main"
+
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
