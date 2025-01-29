@@ -94,7 +94,7 @@ for var=1:size(namef,1)
         % end
         bflux=spm.*cy(t).*bentflux(var);
         eval(['fwrite(fidout_',namef(var),',bflux,''float32'');']);
-        
+
         bf=bflux.*dxg.*dyg;
         bf(bf==0)=NaN;
         if any(~isnan(bf(:)))

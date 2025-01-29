@@ -85,7 +85,7 @@ for var=1:size(namef,1)
         cy(t)=0.5.*(1-cos(((2*pi./365).*t)+2*pi./365*10)); %#ok<SAGROW>
         bflux=sp.*cy(t).*bentflux(var);
         eval(['fwrite(fidout_',namef(var),',bflux,''float32'');']);
-        
+
         bf=bflux.*dxg.*dyg;
         bf(bf==0)=NaN;
         if any(~isnan(bf(:)))

@@ -48,7 +48,7 @@ for var=1:size(namef,1)
         eval(['fidin_',namef(var),...
             '=fopen(''',namef(var),'_bottom_fluxes_GoT_iNEST_V2_flat.dat'',''r'',''l'');']);
     end
-    
+
     tbflux=zeros(nx,ny,nt);
     tbf=zeros(nx,ny,nt);
     for t=1:nt
@@ -57,24 +57,24 @@ for var=1:size(namef,1)
         tbf(:,:,t)=bflux.*dxg.*dyg; % [mmol/s]
     end
     tbfint=squeeze(sum(sum(tbf,1),2));
-    
+
     tonnyr=sum(tbfint).*86400./1e+9.*patom(var); % [tonn/yr]
     disp([namef(var),': ',num2str(tonnyr,'%e'),' [tonn/yr]']);
-    
+
     figure;plot(tbfint); % [mmol/s]
     title(['instant flux of ',namef(var),' - spatially integrated [mmol/s]'])
     set(gcf,'renderer','zbuffer','PaperPositionMode','auto')
     eval(['print -dpng -r600 instant_flux_',namef(var),'.png'])
-    
+
     mbflux=mean(tbflux,3);
     figure;pcolor((mbflux.*surf)');shading flat;colorbar
     title(['mean flux of ',namef(var),' [mmol/m^2/s]'])
     set(gcf,'renderer','zbuffer','PaperPositionMode','auto')
     eval(['print -dpng -r600 mean_flux_',namef(var),'.png'])
     % da fare eventualmente plot mensili...
-    
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+
     figure;
     for stat=20:20:240
         plot(squeeze(tbflux(200,stat,:)),'b')
