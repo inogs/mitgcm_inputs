@@ -60,7 +60,7 @@ print("SHAPE Med", np.shape(mask_hfac))
 plot2D(is_plot, mask_hfac)
 kext = np.zeros((days, ny, nx))
 fKext = open(data_file, "rb")
-A = np.zeros((days, ny, nx))
+
 A = np.fromfile(fKext, dtype=">f4", count=days * nx * ny).reshape(
     (days, ny, nx)
 )
