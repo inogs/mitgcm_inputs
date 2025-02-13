@@ -38,4 +38,4 @@ repos:
   hooks:
     - id: deptry
       entry: deptry
-      args: ["src", "--config", "pyproject.toml"]
+      args: ["-v","src", "--config", "pyproject.toml"]
