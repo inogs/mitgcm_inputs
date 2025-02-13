@@ -8,6 +8,9 @@ packages = [{include = "mitgcm_inputs", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"
+numpy = "^2.2.2"
+matplotlib = "^3.10.0"
+scipy = "^1.15.1"
 
 
 [tool.poetry.group.dev.dependencies]
