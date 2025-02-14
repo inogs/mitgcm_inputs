@@ -2,6 +2,9 @@ import argparse
 import logging
 from sys import exit as sys_exit
 
+from mitgcm_inputs.k_extinction import COMMAND_NAME as kext_command_name
+from mitgcm_inputs.k_extinction import main as kext_main
+from mitgcm_inputs.k_extinction import sub_arguments as kext_sub_arguments
 from mitgcm_inputs.vertical_fluxes import main as vflux_main
 from mitgcm_inputs.vertical_fluxes import sub_arguments as vflux_sub_arguments
 
@@ -39,15 +42,18 @@ def argument():
         required=True,
     )
 
+    kext_sub_arguments(subparsers)
     vflux_sub_arguments(subparsers)
     return parser.parse_args()
 
 
 def main() -> int:
     args = argument()
+    configure_logger()
 
     cmd_map = {
         "vertical_fluxes": vflux_main,
+        kext_command_name: kext_main,
     }
 
     def unknown_command(_args: argparse.Namespace):
