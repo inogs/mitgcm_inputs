@@ -2,9 +2,12 @@ import argparse
 import logging
 from sys import exit as sys_exit
 
-from mitgcm_inputs.k_extinction import COMMAND_NAME as kext_command_name
+from mitgcm_inputs.k_extinction import COMMAND_NAME as KEXT_COMMAND_NAME
 from mitgcm_inputs.k_extinction import main as kext_main
 from mitgcm_inputs.k_extinction import sub_arguments as kext_sub_arguments
+from mitgcm_inputs.surface_deposition import COMMAND_NAME as SD_COMMAND_NAME
+from mitgcm_inputs.surface_deposition import main as sd_main
+from mitgcm_inputs.surface_deposition import sub_arguments as sd_sub_arguments
 from mitgcm_inputs.vertical_fluxes import main as vflux_main
 from mitgcm_inputs.vertical_fluxes import sub_arguments as vflux_sub_arguments
 
@@ -43,6 +46,7 @@ def argument():
     )
 
     kext_sub_arguments(subparsers)
+    sd_sub_arguments(subparsers)
     vflux_sub_arguments(subparsers)
     return parser.parse_args()
 
@@ -53,7 +57,8 @@ def main() -> int:
 
     cmd_map = {
         "vertical_fluxes": vflux_main,
-        kext_command_name: kext_main,
+        SD_COMMAND_NAME: sd_main,
+        KEXT_COMMAND_NAME: kext_main,
     }
 
     def unknown_command(_args: argparse.Namespace):
