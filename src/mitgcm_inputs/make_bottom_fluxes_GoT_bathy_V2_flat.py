@@ -34,9 +34,6 @@ delZ = np.array(
 mask_bottom = np.fromfile(
     ptd.mask_path + "mask_bottom_GoT_iNEST_V2", dtype=int
 ).reshape(p.ny, p.nx)
-mask_qbottom = np.fromfile(
-    ptd.mask_path + "mask_qbottom_GoT_iNEST_V2", dtype=int
-).reshape(p.ny, p.nx)
 mask_surface = np.fromfile(
     ptd.mask_path + "mask_surface_GoT_iNEST_V2", dtype="float32"
 ).reshape(p.ny, p.nx)

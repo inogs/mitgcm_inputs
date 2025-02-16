@@ -12,10 +12,7 @@ from scipy.spatial import Delaunay
 DATA_FILE = Path(__file__).resolve().parent / "data" / "kExt_climatology.nc"
 
 
-if __name__ == "__main__":
-    LOGGER = logging.getLogger()
-else:
-    LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 def compute_k_extinction(
