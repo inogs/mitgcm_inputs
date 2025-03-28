@@ -2,11 +2,11 @@ import argparse
 import logging
 
 import numpy as np
-from bitsea.commons.mask import Mask
 from bitsea.utilities.argparse_types import existing_file_path
 from bitsea.utilities.argparse_types import path_inside_an_existing_dir
 
 from mitgcm_inputs.k_extinction.k_extinction import compute_k_extinction
+from mitgcm_inputs.tools.read_mesh_mask import read_mesh_mask
 
 
 if __name__ == "__main__":
@@ -47,7 +47,7 @@ def main(args: argparse.Namespace) -> int:
         )
         return 1
 
-    mask = Mask.from_file(args.mask)
+    mask = read_mesh_mask(args.mask)
 
     output_data = compute_k_extinction(mask)
     output_dtype = np.float32

@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 VAR_VALUES = MappingProxyType(
     {
         "N1p": 1.1055e-8,
-        "N3N": 6.5938e-7,
+        "N3n": 6.5938e-7,
     }
 )
 
