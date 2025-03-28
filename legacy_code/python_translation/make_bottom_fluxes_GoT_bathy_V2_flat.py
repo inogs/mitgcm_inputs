@@ -4,8 +4,8 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-import mitgcm_inputs.parameters as p
-import mitgcm_inputs.pathes_to_data as ptd
+import legacy_code.python_translation.parameters as p
+import legacy_code.python_translation.pathes_to_data as ptd
 
 
 def check_z_levels(lev, nz):
