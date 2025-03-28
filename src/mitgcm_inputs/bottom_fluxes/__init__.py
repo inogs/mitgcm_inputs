@@ -2,11 +2,11 @@ import argparse
 import logging
 
 import numpy as np
-from bitsea.commons.mask import Mask
 from bitsea.utilities.argparse_types import dir_to_be_created_if_not_exists
 from bitsea.utilities.argparse_types import existing_file_path
 
 from mitgcm_inputs.bottom_fluxes.bottom_fluxes import compute_bottom_fluxes
+from mitgcm_inputs.tools.read_mesh_mask import read_mesh_mask
 from mitgcm_inputs.tools.save_dataset import save_dataset
 
 
@@ -44,7 +44,7 @@ def sub_arguments(subparser):
         "-z",
         "--output-name",
         required=False,
-        default="${VAR}_bottom_fluxes.dat",
+        default="${VAR}_bottom_fluxes.bin",
         type=str,
         help="Name of the output files",
     )
@@ -57,7 +57,7 @@ def main(args: argparse.Namespace) -> int:
         )
         return 1
 
-    mask = Mask.from_file(args.mask)
+    mask = read_mesh_mask(args.mask)
 
     bottom_fluxes_ds = compute_bottom_fluxes(mask)
     output_dtype = np.float32

@@ -1,6 +1,13 @@
 import argparse
 import logging
+import tarfile
+from os import fspath
+from pathlib import Path
 from sys import exit as sys_exit
+from tempfile import TemporaryDirectory
+
+from bitsea.utilities.argparse_types import existing_file_path
+from bitsea.utilities.argparse_types import path_inside_an_existing_dir
 
 from mitgcm_inputs.bottom_fluxes import COMMAND_NAME as BFLUX_COMMAND_NAME
 from mitgcm_inputs.bottom_fluxes import main as bflux_main
@@ -33,7 +40,7 @@ def configure_logger():
     LOGGER.addHandler(handler)
 
 
-def argument():
+def argument(sys_argv=None):
     """
     Generate a subparser for each type of file that can be produced by this
     script and delegate the task of configuring the subparser to the
@@ -49,24 +56,108 @@ def argument():
     kext_sub_arguments(subparsers)
     sd_sub_arguments(subparsers)
     bflux_sub_arguments(subparsers)
-    return parser.parse_args()
+
+    subparser = subparsers.add_parser(
+        "ALL", help="Execute all the available commands"
+    )
+    subparser.add_argument(
+        "-m",
+        "--mask",
+        required=True,
+        type=existing_file_path,
+        help="The meshmask file that defines the domain",
+    )
+
+    subparser.add_argument(
+        "-o",
+        "--output",
+        required=True,
+        type=path_inside_an_existing_dir,
+        help="""
+        Path of the compressed tar.gz file that will store all the output
+        files
+        """,
+    )
+
+    if sys_argv is not None:
+        return parser.parse_args(sys_argv)
+    else:
+        return parser.parse_args()
+
+
+def execute_all_commands(args: argparse.Namespace):
+    mask_path = args.mask
+    output_file = args.output
+
+    with TemporaryDirectory() as tmp_dir:
+        tmp_dir_path = Path(tmp_dir)
+
+        command_args = {
+            BFLUX_COMMAND_NAME: [
+                BFLUX_COMMAND_NAME,
+                "-m",
+                fspath(mask_path),
+                "-o",
+                fspath(tmp_dir_path),
+            ],
+            SD_COMMAND_NAME: [
+                SD_COMMAND_NAME,
+                "-m",
+                fspath(mask_path),
+                "-o",
+                fspath(tmp_dir_path),
+            ],
+            KEXT_COMMAND_NAME: [
+                KEXT_COMMAND_NAME,
+                "-m",
+                fspath(mask_path),
+                "-o",
+                fspath(tmp_dir_path / "Kext.bin"),
+            ],
+        }
+
+        for command_name, command in CMD_MAP.items():
+            if command_name.lower() == "all":
+                continue
+            current_args = command_args[command_name]
+            LOGGER.info("Executing %s", command_name)
+            LOGGER.debug(
+                "Executing %s with the following args: %s",
+                command_name,
+                current_args,
+            )
+            command(argument(current_args))
+
+        output_stem = output_file.stem
+        if output_stem.lower().endswith(".tar"):
+            output_stem = Path(output_stem).stem
+
+        with tarfile.open(output_file, "w:gz") as tar:
+            for file_path in tmp_dir_path.iterdir():
+                tar.add(
+                    file_path,
+                    arcname=output_stem + "/" + file_path.name,
+                )
+    return 0
+
+
+CMD_MAP = {
+    BFLUX_COMMAND_NAME: bflux_main,
+    SD_COMMAND_NAME: sd_main,
+    KEXT_COMMAND_NAME: kext_main,
+    "ALL": execute_all_commands,
+}
 
 
 def main() -> int:
     args = argument()
     configure_logger()
 
-    cmd_map = {
-        BFLUX_COMMAND_NAME: bflux_main,
-        SD_COMMAND_NAME: sd_main,
-        KEXT_COMMAND_NAME: kext_main,
-    }
-
     def unknown_command(_args: argparse.Namespace):
         LOGGER.error("Invalid command name: %s", _args.cmd)
         return 1
 
-    return cmd_map.get(args.cmd, unknown_command)(args)
+    return CMD_MAP.get(args.cmd, unknown_command)(args)
 
 
 if __name__ == "__main__":
