@@ -5,6 +5,7 @@ from os import fspath
 from pathlib import Path
 from sys import exit as sys_exit
 from tempfile import TemporaryDirectory
+from time import time
 
 from bitsea.utilities.argparse_types import existing_file_path
 from bitsea.utilities.argparse_types import path_inside_an_existing_dir
@@ -132,12 +133,31 @@ def execute_all_commands(args: argparse.Namespace):
         if output_stem.lower().endswith(".tar"):
             output_stem = Path(output_stem).stem
 
+        LOGGER.info("Compressing data into file %s", output_file)
         with tarfile.open(output_file, "w:gz") as tar:
             for file_path in tmp_dir_path.iterdir():
+                tar_relative_path = Path(output_stem) / file_path.name
                 tar.add(
                     file_path,
-                    arcname=output_stem + "/" + file_path.name,
+                    arcname=tar_relative_path,
                 )
+
+            # Get one random file inside the tar
+            reference_file = next(iter(tar.getmembers()))
+
+            # Add the directory where the files are stored as a tar object
+            # (otherwise MER produces an error)
+            data_dir = tarfile.TarInfo(name=output_stem)
+            data_dir.type = tarfile.DIRTYPE
+            data_dir.mtime = int(time())
+            data_dir.uid = reference_file.uid
+            data_dir.gid = reference_file.gid
+            data_dir.uname = reference_file.uname
+            data_dir.gname = reference_file.gname
+
+            tar.addfile(data_dir)
+
+        LOGGER.info("Everything done!")
     return 0
 
 
