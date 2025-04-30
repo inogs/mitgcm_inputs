@@ -49,8 +49,8 @@ def compute_k_extinction(
         data_lon_max,
     )
 
-    mesh_lon = meshmask.xlevels[~meshmask[0]]
-    mesh_lat = meshmask.ylevels[~meshmask[0]]
+    mesh_lon = meshmask.xlevels[meshmask[0]]
+    mesh_lat = meshmask.ylevels[meshmask[0]]
 
     if (min_mesh_lon := np.min(mesh_lon)) < data_lon_min:
         raise ValueError(
@@ -103,7 +103,7 @@ def compute_k_extinction(
         )
         day_data = interpolator(mesh_lon, mesh_lat)
 
-        output[d, ~meshmask[0]] = day_data
+        output[d, meshmask[0]] = day_data
 
     LOGGER.debug("All days have been computed")
 
