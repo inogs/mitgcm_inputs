@@ -15,10 +15,11 @@ LOGGER = logging.getLogger(__name__)
 FILL_VALUE = np.float32(0.0)
 
 
-# Mean (±standard deviation) annual benthic fluxes of N, P, Si and O2 (mmol m−2 d−1).
-# Reference                 NO−3		NH+4		PO3−4		Si(OH)4		O2
-# Bertuzzi et al. (1997)	0.17±0.73	0.8±0.7		0.029±0.05	2.59±2.3	−20.4±8.9
-# BFM–POM 1D				0.27±0.16	0.63±0.38	0.048±0.03	0.47±0.41	−5.14±3.5
+# Mean (±standard deviation) annual benthic fluxes of N, P, Si and
+# O2 (mmol m−2 d−1).
+# Reference              NO−3       NH+4       PO3−4       Si(OH)4    O2
+# Bertuzzi et al.(1997)  0.17±0.73  0.8±0.7    0.029±0.05  2.59±2.3   −20.4±8.9
+# BFM–POM 1D             0.27±0.16  0.63±0.38  0.048±0.03  0.47±0.41  −5.14±3.5
 
 
 class BenthicVar(StrEnum):
@@ -53,7 +54,8 @@ p_atom = {
     BenthicVar.O: 16,
 }
 
-# Mean (±standard deviation) annual benthic fluxes of N, P, Si and O2 (mmol m−2 s−1).
+# Mean (±standard deviation) annual benthic fluxes of N, P, Si and
+# O2 (mmol m−2 s−1).
 benthic_fluxes = {
     BenthicVar.N: (0.17 + 0.8) / 86400,
     BenthicVar.P: 0.029 / 86400,

@@ -50,7 +50,8 @@ btm = np.fromfile("Depth.data", dtype="float32").reshape(p.ny, p.nx)
 # minlev=19; % 19(AZAL_HR)=~15 m; 3.00 (profondità minima)
 minlev = 15  # 15(GoT_iNEST)=~11 m; 3.00 (profondità minima)
 mindepth = np.sum(delZ[:minlev])
-# levlim=15; % -> ~70 m; levlim=12(AZAL) -> W-Interf. bottom 48.8900 (limite dei ~50 m)
+# W-Interf. bottom 48.8900 (limite dei ~50 m)
+# levlim=15; % -> ~70 m; levlim=12(AZAL)
 # levlim=45; % -> ~70 m; levlim=42(AZAL_HR) -> limite dei ~50 m
 levlim = 37  # -> ~35 m; levlim=37(GoT_iNEST) -> limite dei ~35 m
 exp = 3
