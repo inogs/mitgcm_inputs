@@ -53,9 +53,9 @@ filenames = [
     "mask_surface_GoT_iNEST_V2",
     "mask_bhFacC_GoT_iNEST_V2",
 ]
-surf = surf.copy(
-    order="C"
-)  # force to be C-contiguos, necessary rto save it with write, with np.save worked already
+# force to be C-contiguos, necessary to save it with write, with np.save
+# worked already
+surf = surf.copy(order="C")
 c = 0
 for name in filenames:
     f = open(name, "wb")
