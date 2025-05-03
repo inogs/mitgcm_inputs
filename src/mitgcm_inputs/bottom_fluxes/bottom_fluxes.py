@@ -10,6 +10,11 @@ from bitsea.commons.mask import Mask
 LOGGER = logging.getLogger(__name__)
 
 
+# This is the value that will be used for the cells that do not contain water
+# FILL_VALUE = np.nan
+FILL_VALUE = np.float32(0.0)
+
+
 # Mean (±standard deviation) annual benthic fluxes of N, P, Si and O2 (mmol m−2 d−1).
 # Reference                 NO−3		NH+4		PO3−4		Si(OH)4		O2
 # Bertuzzi et al. (1997)	0.17±0.73	0.8±0.7		0.029±0.05	2.59±2.3	−20.4±8.9
@@ -104,7 +109,9 @@ def depth_variability_factor(
     min_depth = 3.0  # meters
 
     benthic_flux = benthic_fluxes[benthic_var]
-    main_coeff = ((ref_depth - depth) / (ref_depth - min_depth)) ** exp_coeff
+    main_coeff = np.maximum(
+        ((ref_depth - depth) / (ref_depth - min_depth)) ** exp_coeff, 0
+    )
     return benthic_flux * main_coeff
 
 
@@ -123,7 +130,7 @@ def compute_bottom_fluxes(meshmask: Mask):
 
     for variable in BenthicVar:
         LOGGER.debug("Computing bottom fluxes for %s", variable)
-        data = np.full(depth.shape, np.nan)
+        data = np.full(depth.shape, FILL_VALUE, dtype=np.float32)
         data[meshmask[0]] = depth_variability_factor(
             depth[meshmask[0]], variable
         )
