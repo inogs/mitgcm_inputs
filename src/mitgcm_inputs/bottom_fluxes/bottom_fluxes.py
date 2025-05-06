@@ -34,8 +34,8 @@ class BenthicVar(StrEnum):
     Attributes:
         N: Represents benthic variable Nitrogen
         P: Represents benthic variable Phosphorus
-        B: Represents benthic variable Boron
-        C: Represents benthic variable Carbon
+        B: Represents benthic variable Biological Oxygen Demand
+        C: Represents benthic variable Chemical Oxygen Demand
         O: Represents benthic variable Oxygen
     """
 
@@ -107,13 +107,23 @@ def depth_variability_factor(
     """
     # Parameters
     exp_coeff = 3
-    ref_depth = 35.0  # meters
-    min_depth = 3.0  # meters
+    depth_start_decay = 10.0  # meters
+    depth_zero_flux = 50.0  # meters
+
+    # bounded_depth = np.clip(
+    #     depth, a_max=depth_zero_flux, a_min=depth_start_decay
+    # )
+    bounded_depth = np.minimum(depth, depth_zero_flux)
+
+    # Value between 0 and 1; it is 1 when we are on depth_start_decay, it is
+    # 0 when we are on depth_zero_flux
+    depth_fraction = (depth_zero_flux - bounded_depth) / (
+        depth_zero_flux - depth_start_decay
+    )
 
     benthic_flux = benthic_fluxes[benthic_var]
-    main_coeff = np.maximum(
-        ((ref_depth - depth) / (ref_depth - min_depth)) ** exp_coeff, 0
-    )
+    main_coeff = depth_fraction**exp_coeff
+
     return benthic_flux * main_coeff
 
 
@@ -121,6 +131,7 @@ def compute_bottom_fluxes(meshmask: Mask):
     n_days = 365
 
     depth = meshmask.bathymetry()
+    water_cells = meshmask[0]
 
     dataset = xr.Dataset(
         coords={
@@ -133,8 +144,8 @@ def compute_bottom_fluxes(meshmask: Mask):
     for variable in BenthicVar:
         LOGGER.debug("Computing bottom fluxes for %s", variable)
         data = np.full(depth.shape, FILL_VALUE, dtype=np.float32)
-        data[meshmask[0]] = depth_variability_factor(
-            depth[meshmask[0]], variable
+        data[water_cells] = depth_variability_factor(
+            depth[water_cells], variable
         )
         time_coefficients = time_variability_factor(
             np.arange(1, 366), variable
