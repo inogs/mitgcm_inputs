@@ -1,6 +1,7 @@
 import logging
 from enum import StrEnum
 from numbers import Real
+from types import MappingProxyType
 
 import numpy as np
 import xarray as xr
@@ -28,8 +29,7 @@ class BenthicVar(StrEnum):
 
     This class provides an enumeration for specific benthic variables.
     Each value corresponds to a particular type of benthic variable identified
-    by its associated character code. It is a subclass of StrEnum to ensure the
-    values are treated as strings.
+    by its associated character code.
 
     Attributes:
         N: Represents benthic variable Nitrogen
@@ -46,23 +46,27 @@ class BenthicVar(StrEnum):
     O = "O"  # noqa: E741
 
 
-p_atom = {
-    BenthicVar.N: 14,
-    BenthicVar.P: 31,
-    BenthicVar.B: 1,
-    BenthicVar.C: 1,
-    BenthicVar.O: 16,
-}
+ATOMIC_WEIGHTS = MappingProxyType(
+    {
+        BenthicVar.N: 14,
+        BenthicVar.P: 31,
+        BenthicVar.B: 1,
+        BenthicVar.C: 1,
+        BenthicVar.O: 16,
+    }
+)
 
 # Mean (±standard deviation) annual benthic fluxes of N, P, Si and
 # O2 (mmol m−2 s−1).
-benthic_fluxes = {
-    BenthicVar.N: (0.17 + 0.8) / 86400,
-    BenthicVar.P: 0.029 / 86400,
-    BenthicVar.B: 0.0,
-    BenthicVar.C: 0.0,
-    BenthicVar.O: -20.4 / 86400,
-}
+BENTHIC_FLUXES = MappingProxyType(
+    {
+        BenthicVar.N: (0.17 + 0.8) / 86400,
+        BenthicVar.P: 0.029 / 86400,
+        BenthicVar.B: 0.0,
+        BenthicVar.C: 0.0,
+        BenthicVar.O: -20.4 / 86400,
+    }
+)
 
 
 def time_variability_factor(t: np.ndarray | Real, _benthic_var: BenthicVar):
@@ -90,7 +94,11 @@ def time_variability_factor(t: np.ndarray | Real, _benthic_var: BenthicVar):
 
 
 def depth_variability_factor(
-    depth: np.ndarray | Real, benthic_var: BenthicVar
+    depth: np.ndarray | Real,
+    benthic_var: BenthicVar,
+    depth_start_decay: float = 10.0,
+    depth_zero_flux: float = 50.0,
+    exp_coeff: int = 3,
 ):
     """
     Compute a coefficient that represents the vertical variability of benthic
@@ -101,15 +109,21 @@ def depth_variability_factor(
     Args:
         depth: The depth at which the coefficient is calculated.
         benthic_var: The variable for which the coefficient is calculated.
+        depth_start_decay: The depth at which the flux starts to decrease. At
+            this depth, the flux is exactly equal to the reference values
+            stored in the `BENTHIC_FLUXES` map.
+        depth_zero_flux: The depth at which the flux is exactly equal to zero.
+            For depths that are between `depth_start_decay` and
+            `depth_zero_flux`, the value is interpolated. Below this depth, the
+            flux is always equal to zero.
+        exp_coeff: The exponent used to compute the decay. If it is 1, the
+            flux will decrease linearly from `depth_start_decay` to
+            `depth_zero_flux`. If it is 2, the flux will decrease quadratically
+            and so on.
 
     Returns:
         The value of the benthic flux at the given depth.
     """
-    # Parameters
-    exp_coeff = 3
-    depth_start_decay = 10.0  # meters
-    depth_zero_flux = 50.0  # meters
-
     # bounded_depth = np.clip(
     #     depth, a_max=depth_zero_flux, a_min=depth_start_decay
     # )
@@ -121,7 +135,7 @@ def depth_variability_factor(
         depth_zero_flux - depth_start_decay
     )
 
-    benthic_flux = benthic_fluxes[benthic_var]
+    benthic_flux = BENTHIC_FLUXES[benthic_var]
     main_coeff = depth_fraction**exp_coeff
 
     return benthic_flux * main_coeff
