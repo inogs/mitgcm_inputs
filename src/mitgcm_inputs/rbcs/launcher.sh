@@ -21,7 +21,7 @@ do
         mv MIT_static.nc ${dom}/MIT_static_${dom}.nc
         mv rivers_positions.json ${dom}/rivers_positions_${dom}.json
 
-        python -u rbcs_gen.py -i $JSON_DIR -d ${dom}
+        python3 -u rbcs_gen.py -i $JSON_DIR -d ${dom} --domdir $PWD/${dom}
         echo ${dom}" done!"
 done
 

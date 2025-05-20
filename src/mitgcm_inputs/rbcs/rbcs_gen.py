@@ -1,6 +1,34 @@
+import argparse
+from bitsea.utilities.argparse_types import existing_dir_path
+
+
+def argument():
+	parser = argparse.ArgumentParser(description = """
+    """)
+	parser.add_argument(
+        '--inputdir', '-i',
+        type=existing_dir_path,
+        required=True,
+        help="Output of scarichi_json_gen.py "
+    )
+	parser.add_argument(
+        '--domain', '-d',
+        type=str,
+        required=True,
+        help ="NAD, SAD, ..."
+    )
+	parser.add_argument(
+        '--domdir',
+        type=existing_dir_path,
+        required=True,
+    )
+	return parser.parse_args()
+
+args = argument()
+
+
 import numpy as np
 import xarray as xr
-import pandas as pd
 import sys
 import json
 
@@ -135,14 +163,14 @@ def write_binary_files(
 	arrays, writes them to MITgcm-appropriate binary files.
 	"""
 	
-	relax_sal.values.astype('f4').tofile(out_dir+relax_path)
+	relax_sal.values.astype('f4').tofile(out_dir / relax_path)
 	if conc_in_time == 1:
-		conc.values.astype('f4').tofile(out_dir+conc_path)
+		conc.values.astype('f4').tofile(out_dir / conc_path)
 	else:
-		np.stack([conc.values]*conc_in_time).astype('f4').tofile(out_dir+conc_path)
-	S_mask.values.astype('f4').tofile(out_dir+mask_path)
+		np.stack([conc.values]*conc_in_time).astype('f4').tofile(out_dir / conc_path)
+	S_mask.values.astype('f4').tofile(out_dir / mask_path)
 	if aggregated:
-		xr.merge([relax_sal.rename('relax_salinity'), conc.rename('tracer_conc')]).to_netcdf(out_dir+aggreg_path)
+		xr.merge([relax_sal.rename('relax_salinity'), conc.rename('tracer_conc')]).to_netcdf(out_dir / aggreg_path)
 
 #
 
@@ -189,32 +217,33 @@ def fill_river_conc(
 
 ###
 
-def main():
-	base_path = sys.argv[1]
-	domain = sys.argv[2]
-	static_path = base_path + domain + '/'
-	print('\n', static_path, '\n')
-	relax_salt = initialise_sal(xr.open_dataset(static_path + 'MIT_static_' + domain + '.nc').hFacC)
-	tracer_conc = initialise_conc_fluxes(xr.open_dataset(static_path + 'MIT_static_' + domain + '.nc').hFacC)
-	coords = get_spatial_masks(xr.open_dataset(static_path + 'MIT_static_' + domain + '.nc'))
-	
-	sewage_path = base_path + domain + f'/PointSource_wSalt_{domain}.json'
-	sewers = open_point_sources(sewage_path)
-	
-	relax_salt, mask_salt, tracer_conc = fill_sal_conc(relax_salt, tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], sewers, only_one=True)
-	write_binary_files(relax_salt, mask_salt, tracer_conc, out_dir=static_path,
-					   relax_path='bottom_sources_S_relaxation_'+domain+'.bin', conc_path='conc01_bottom_fluxes_'+domain+'.bin',
-					   mask_path='bottom_sources_S_mask_'+domain+'.bin', aggreg_path='sewage_discharges_'+domain+'.bin')
-	#
-	rivers_path = base_path + domain + f'/RiverSource_{domain}.json'
-	rivers = open_river_sources(rivers_path)
+
+base_path = args.inputdir
+domain = args.domain
+
+
+inputfile=args.domdir / ('MIT_static_' + domain + '.nc')
+relax_salt = initialise_sal(xr.open_dataset(inputfile).hFacC)
+tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
+coords = get_spatial_masks(xr.open_dataset(inputfile))
+
+sewage_path = args.inputdir / f'PointSource_{domain}.json'
+sewers = open_point_sources(sewage_path)
+
+relax_salt, mask_salt, tracer_conc = fill_sal_conc(relax_salt, tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], sewers, only_one=True)
+write_binary_files(relax_salt, mask_salt, tracer_conc, out_dir=args.domdir,
+				   relax_path='bottom_sources_S_relaxation_'+domain+'.bin', conc_path='conc01_bottom_fluxes_'+domain+'.bin',
+				   mask_path='bottom_sources_S_mask_'+domain+'.bin', aggreg_path='sewage_discharges_'+domain+'.bin')
+#
+#rivers_path = base_path + domain + f'/RiverSource_{domain}.json'
+#rivers = open_river_sources(rivers_path)
 
 
 
 #
+#
+# if __name__ == '__main__':
+# 	main()
+# 	print('DONE!')
 
-if __name__ == '__main__':
-    main()
-    print('DONE!')
 
-###
