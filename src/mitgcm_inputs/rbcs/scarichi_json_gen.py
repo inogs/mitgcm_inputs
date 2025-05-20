@@ -1,16 +1,48 @@
-# read the Allegato1 excel file and select the domain from 1 to 7 and 
-# build the json files with the coordinate of the pointsource for E.Coli tracers
+import argparse
+from bitsea.utilities.argparse_types import existing_file_path
+from bitsea.utilities.argparse_types import existing_dir_path
+
+
+
+def argument():
+    parser = argparse.ArgumentParser(description = """
+    Read the Allegato1 excel file and select the domain from 1 to 7 and
+    build the json files with the coordinate of the pointsource for E.Coli tracers
+    PointSource_NAD.json
+    PointSource_SAD.json
+    ...
+
+    """)
+
+    parser.add_argument(
+        '--inputfile', '-i',
+        type=existing_file_path,
+        default="Allegato_1_Capitolato_Tecnico_B32_B35_scarichi.xlsx",
+        required=False,
+        help="Scarichi, sewage discharge locations "
+    )
+    parser.add_argument(
+        '--outdir', '-o',
+        type=existing_dir_path,
+        required=True,
+    )
+
+
+    return parser.parse_args()
+
+args = argument()
+
+
 import numpy as np
 import pandas as pd
 import json
 import os
 import copernicusmarine as cm
-import sys
 
-# Allegato 1 of sewage discharge locations 
-excel_file = 'Allegato_1_Capitolato_Tecnico_B32_B35_modificato.xlsx'
-base_path = sys.argv[1]
-data_path = sys.argv[2]
+excel_file = args.inputfile
+OUTDIR = args.outdir
+
+
 # select the n. of domain from 1 to 7 and name the json file
 WHICH_DOMAIN=1
 #output_file = 'PointSource_nordadri.json'
@@ -76,7 +108,7 @@ print('Loaded datasets!')
 file_name = os.path.splitext(os.path.basename(excel_file))[0]
 
 # Read the Excel file into a DataFrame
-df = pd.read_excel(data_path+excel_file)
+df = pd.read_excel(excel_file)
 
 for id, namedomain in enumerate(domains):
 
@@ -127,7 +159,7 @@ for id, namedomain in enumerate(domains):
       "discharge_points": filtered_rows
   }
   # build the output file name
-  output_file = base_path + domains[id] + '/PointSource_wSalt_' + domains[id] + '.json'
+  output_file = OUTDIR / (domains[id] + '/PointSource_' + domains[id] + '.json' )
   # Write the final JSON structure to a JSON file
   with open(output_file, 'w') as json_file:
       json.dump(output_data, json_file, indent=4)

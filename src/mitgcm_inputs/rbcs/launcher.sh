@@ -15,17 +15,16 @@ do
         mv rivers_positions.json ${dom}/rivers_positions_${dom}.json
 done
 
-## jsons
-base_path=/g100_scratch/userexternal/fgiordan/MER/
-script_path=/g100_scratch/userexternal/fgiordan/MER/MITgcm_BC_IC/mitgcm/bc_ic/static-data/masks/MER
+
+
+JSON_DIR=$PWD/JSON_DIR
+mkdir -p $JSON_DIR
 
 #python ${script_path}read_excellistaFIUMI_do_json_for_7domains.py ${base_path} ${script_path}
-python ${script_path}/scarichi_json_gen.py ${base_path} ${script_path}
+python scarichi_json_gen.py -i $PWD/Allegato_1_Capitolato_Tecnico_B32_B35_scarichi.xlsx -o $JSON_DIR
 echo "Excel read!"
 
-## download and make binaries 
-
-
+ 
 for dom in ${domains}; do
         python -u ${script_path}/rbcs_gen.py ${base_path} ${dom}
         echo ${dom}" done!"
