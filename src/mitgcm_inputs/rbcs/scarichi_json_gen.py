@@ -6,7 +6,8 @@ from bitsea.utilities.argparse_types import existing_dir_path
 
 def argument():
     parser = argparse.ArgumentParser(description = """
-    Read the Allegato1 excel file and select the domain from 1 to 7 and
+    Reads seawage info on excel file and for all the domains
+    Takes salinity data from MDS service
     build the json files with the coordinate of the pointsource for E.Coli tracers
     PointSource_NAD.json
     PointSource_SAD.json
@@ -36,23 +37,17 @@ args = argument()
 import numpy as np
 import pandas as pd
 import json
-import os
 import copernicusmarine as cm
 
 excel_file = args.inputfile
 OUTDIR = args.outdir
 
-
-# select the n. of domain from 1 to 7 and name the json file
-WHICH_DOMAIN=1
-#output_file = 'PointSource_nordadri.json'
-#domains=['NAD','SAD','ION','SIC','TYR','LIG','SAR']
 domains=['NAD','SAD','ION','SIC','TYR','LIG','SAR', 'GoT', 'GSN']
 
 
 # subset and read CMS reanalysis for salinity
-x0, x1 = 6.5000, 21.0000 #12.22265625, 16.07421875
-y0, y1 = 35.0000, 45.80859375 #43.47265625, 45.80859375
+x0, x1 = 6.5000, 21.0000
+y0, y1 = 35.0000, 45.80859375
 z0, z1 = 1.0182366371154785, 5754.
 
 t0 = '2012-01-01T00:00:00'
@@ -62,8 +57,6 @@ dataset = 'med-cmcc-sal-rean-d'
 var = 'so'
 
 sal = cm.open_dataset(
-    username = '...',
-    password = '...',
     dataset_id = dataset,
     #dataset_version = version,
     variables = [var],
@@ -89,8 +82,6 @@ dataset = 'cmems_mod_med_phy_my_4.2km_static'
 var = 'deptho_lev'
 
 bathyCMS = cm.open_dataset(
-    username = '...',
-    password = '...',
     dataset_id = dataset,
     #dataset_version = version,
     variables = [var],
@@ -104,8 +95,6 @@ bathyCMS = cm.open_dataset(
 
 print('Loaded datasets!')
 
-# Extract the Excel file name without extension
-file_name = os.path.splitext(os.path.basename(excel_file))[0]
 
 # Read the Excel file into a DataFrame
 df = pd.read_excel(excel_file)
@@ -152,14 +141,14 @@ for id, namedomain in enumerate(domains):
 
     # Create the final JSON structure
     output_data = {
-        "file_name_origin": file_name,
+        "file_name_origin": excel_file.name,
         "domain_number": id+1,
         "domain_name": domains[id],
         "n_points": len(filtered_rows),
         "discharge_points": filtered_rows
     }
     # build the output file name
-    output_file = OUTDIR / (domains[id] + '/PointSource_' + domains[id] + '.json' )
+    output_file = OUTDIR / ('PointSource_' + domains[id] + '.json' )
     # Write the final JSON structure to a JSON file
     with open(output_file, 'w') as json_file:
         json.dump(output_data, json_file, indent=4)
