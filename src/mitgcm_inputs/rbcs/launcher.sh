@@ -17,17 +17,17 @@ done
 
 ## jsons
 base_path=/g100_scratch/userexternal/fgiordan/MER/
-script_path=/g100_scratch/userexternal/fgiordan/MER/MITgcm_BC_IC/mitgcm/bc_ic/static-data/masks/MER/
+script_path=/g100_scratch/userexternal/fgiordan/MER/MITgcm_BC_IC/mitgcm/bc_ic/static-data/masks/MER
 
-python ${script_path}read_excellistaFIUMI_do_json_for_7domains.py ${base_path} ${script_path}
-python ${script_path}read_excelAllegato_1_do_json_for_7domains_with_salinity.py ${base_path} ${script_path}
+#python ${script_path}read_excellistaFIUMI_do_json_for_7domains.py ${base_path} ${script_path}
+python ${script_path}/scarichi_json_gen.py ${base_path} ${script_path}
 echo "Excel read!"
 
 ## download and make binaries 
 
 
 for dom in ${domains}; do
-        python -u ${script_path}point_sources_n_rivers.py ${base_path} ${dom}
+        python -u ${script_path}/rbcs_gen.py ${base_path} ${dom}
         echo ${dom}" done!"
 done
 
