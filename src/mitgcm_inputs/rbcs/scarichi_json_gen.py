@@ -112,57 +112,57 @@ df = pd.read_excel(excel_file)
 
 for id, namedomain in enumerate(domains):
 
-  # Filter rows where the value in column 'Dominio' is id+1 (valid number from 1 to 7)
-  if id < 7:
-      filtered_df = df[df['Dominio'] == id + 1]
-  else:
-      filtered_df = df[df['Sotto-Dominio'] == 8]  ### hardcoded horribly !!!
-
-  # Select only the interesting columns 
-  selected_columns = filtered_df[['Codice_Scarico', 'Lat', 'Long','Carico_Ingresso_AE', 'Nome_scarico','Regione']]
-
-  depths = []
-  Savg = []
-  Sstd = []
-  dilut_fac = 1.
-  for scol in range(selected_columns.shape[0]):
-      lat_df = selected_columns.Lat.to_numpy()[scol]
-      lon_df = selected_columns.Long.to_numpy()[scol]
-      #j = np.nanargmin(np.abs(lat_df - sal.latitude.values)) ##
-      #i = np.nanargmin(np.abs(lon_df - sal.longitude.values)) ##
-      idx = np.nanargmin((Lon-lon_df)**2 + (Lat-lat_df)**2)
-      #if np.shape(lon_df) == ():
-      #	j, i = idx//1, idx%1
-      #else:
-      #	j, i = idx//len(lon_df), idx%len(lon_df)
-      j, i = idx//len(sal.longitude.values), idx%len(sal.longitude.values)
-      k = bathyCMS[j, i].values
-      kn = int(np.where(np.isnan(k), 0, k - 1))
-      depths.append(sal.depth[kn].values * k / k)
-      Savg.append(np.mean(sal.so[:, kn, j, i].values * k / k))
-      Sstd.append(np.std(sal.so[:, kn, j, i].values * k / k))
-
-  selected_columns.insert(5, "CMS_depth", depths, True)
-  selected_columns.insert(6, "CMS_avgS", Savg, True)
-  selected_columns.insert(7, "CMS_stdS", Sstd, True)
-  selected_columns.insert(8, "Dilution_factor", dilut_fac, True)
-
-  # Convert the selected rows to a list of dictionaries
-  filtered_rows = selected_columns.to_dict(orient='records')
-
-  # Create the final JSON structure
-  output_data = {
-      "file_name_origin": file_name,
-      "domain_number": id+1,
-      "domain_name": domains[id],
-      "n_points": len(filtered_rows),
-      "discharge_points": filtered_rows
-  }
-  # build the output file name
-  output_file = OUTDIR / (domains[id] + '/PointSource_' + domains[id] + '.json' )
-  # Write the final JSON structure to a JSON file
-  with open(output_file, 'w') as json_file:
-      json.dump(output_data, json_file, indent=4)
+    # Filter rows where the value in column 'Dominio' is id+1 (valid number from 1 to 7)
+    if id < 7:
+        filtered_df = df[df['Dominio'] == id + 1]
+    else:
+        filtered_df = df[df['Sotto-Dominio'] == 8]  ### hardcoded horribly !!!
     
-  print(f"JSON file created: {output_file}")
+    # Select only the interesting columns 
+    selected_columns = filtered_df[['Codice_Scarico', 'Lat', 'Long','Carico_Ingresso_AE', 'Nome_scarico','Regione']]
+    
+    depths = []
+    Savg = []
+    Sstd = []
+    dilut_fac = 1.
+    for scol in range(selected_columns.shape[0]):
+        lat_df = selected_columns.Lat.to_numpy()[scol]
+        lon_df = selected_columns.Long.to_numpy()[scol]
+        #j = np.nanargmin(np.abs(lat_df - sal.latitude.values)) ##
+        #i = np.nanargmin(np.abs(lon_df - sal.longitude.values)) ##
+        idx = np.nanargmin((Lon-lon_df)**2 + (Lat-lat_df)**2)
+        #if np.shape(lon_df) == ():
+        #	j, i = idx//1, idx%1
+        #else:
+        #	j, i = idx//len(lon_df), idx%len(lon_df)
+        j, i = idx//len(sal.longitude.values), idx%len(sal.longitude.values)
+        k = bathyCMS[j, i].values
+        kn = int(np.where(np.isnan(k), 0, k - 1))
+        depths.append(sal.depth[kn].values * k / k)
+        Savg.append(np.mean(sal.so[:, kn, j, i].values * k / k))
+        Sstd.append(np.std(sal.so[:, kn, j, i].values * k / k))
+
+    selected_columns.insert(5, "CMS_depth", depths, True)
+    selected_columns.insert(6, "CMS_avgS", Savg, True)
+    selected_columns.insert(7, "CMS_stdS", Sstd, True)
+    selected_columns.insert(8, "Dilution_factor", dilut_fac, True)
+
+    # Convert the selected rows to a list of dictionaries
+    filtered_rows = selected_columns.to_dict(orient='records')
+
+    # Create the final JSON structure
+    output_data = {
+        "file_name_origin": file_name,
+        "domain_number": id+1,
+        "domain_name": domains[id],
+        "n_points": len(filtered_rows),
+        "discharge_points": filtered_rows
+    }
+    # build the output file name
+    output_file = OUTDIR / (domains[id] + '/PointSource_' + domains[id] + '.json' )
+    # Write the final JSON structure to a JSON file
+    with open(output_file, 'w') as json_file:
+        json.dump(output_data, json_file, indent=4)
+    
+    print(f"JSON file created: {output_file}")
 
