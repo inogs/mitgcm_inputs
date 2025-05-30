@@ -6,6 +6,9 @@
 JSON_DIR=$PWD/JSON_DIR
 mkdir -p $JSON_DIR
 
+domains="GOT GSN ION LIG NAD SAD SAR SIC TYR"
+URL=https://medeaf.ogs.it/internal-validation/gbolzon/MER/Domain_static_data
+
 for dom in ${domains}
 do
         mkdir -p ${dom}
@@ -17,10 +20,6 @@ done
 
 python scarichi_json_gen.py -i $PWD/Allegato_1_Capitolato_Tecnico_B32_B35_scarichi.xlsx -o $JSON_DIR ###
 python fiumi_json_gen.py -i $PWD/listaFIUMI_MER.xlsx -o $JSON_DIR ###
-
-URL=https://medeaf.ogs.it/internal-validation/gbolzon/MER/Domain_static_data
-domains="GOT GSN ION LIG NAD SAD SAR SIC TYR"
-
 
 for dom in ${domains}
 do
