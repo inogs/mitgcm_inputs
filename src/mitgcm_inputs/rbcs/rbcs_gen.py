@@ -122,7 +122,8 @@ def fill_sal_conc(
 		depth,
 		json_data,
 		water_freshener = 0.5,
-		only_one = False
+		only_one = False,
+		fixed_conc = None,
 ):
 	"""
 	Given the info for the point sources and the spatial static data,
@@ -140,7 +141,10 @@ def fill_sal_conc(
 		j = np.argmin(np.abs(y.values - lat))
 		k = np.argmin(np.abs(z.values + depth[j,i].values))
 		rel_S = jd['CMS_avgS'] - water_freshener
-		c = jd['Carico_Ingresso_AE'] * jd['Dilution_factor']
+		if fixed_conc == 'None':
+			c = jd['Carico_Ingresso_AE'] * jd['Dilution_factor']
+		elif isinstance(fixed_conc, float):
+			c = fixed_conc
 		relax_sal[k,j,i] = rel_S
 		conc_list[ns][j,i] = c
 	return relax_sal, xr.where(relax_sal == 0., 0., 1.).astype('f4'), conc_list
@@ -156,6 +160,7 @@ def fill_river_conc(
 		json_data,
 		discharge_json,
 		uniform_concentration = 1000.,
+		fixed_conc = None,
 ):
 	"""
 	Given the info for the point sources and the spatial static data,
@@ -186,16 +191,16 @@ def fill_river_conc(
 			j -= 1
 		k = np.argmin(np.abs(z.values - depth[j, i].values))
 		print(j, i)
-		try:
-			cntr = 0
-			while discharge_json[cntr]['rivername'] != jd['name']:
-				cntr += 1
-			print(cntr)
-			print(discharge_json[cntr]['rivername'])
-			c = discharge_json[cntr]['MEAN_2011_2023'] * uniform_concentration
-			print(c)
-		except:
-			c = 50.e3
+		if fixed_conc == None:
+			try:
+				cntr = 0
+				while discharge_json[cntr]['rivername'] != jd['name']:
+					cntr += 1
+				c = discharge_json[cntr]['MEAN_2011_2023'] * uniform_concentration
+			except:
+				c = 50.e3
+		elif isinstance(fixed_conc, float):
+			c = fixed_conc
 		#relax_sal[k, j, i] = rel_S
 		conc_list[ns][j,i] += c
 		print(conc_list[ns].max().values)
@@ -256,7 +261,7 @@ def main():
 	tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
 	coords = get_spatial_masks(xr.open_dataset(inputfile))
 
-	relax_salt, mask_salt, concentrations = fill_sal_conc(relax_salt, tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], sewers)#, only_one=True)
+	relax_salt, mask_salt, concentrations = fill_sal_conc(relax_salt, tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], sewers, fixed_conc=1.)
 	#write_binary_files(relax_salt, mask_salt, tracer_conc, out_dir=args.domdir, conc_path='conc01_bottom_fluxes.bin',)
 
 	# rivers
@@ -266,7 +271,7 @@ def main():
 	old_rivers = open_old_rivers(old_rivers_path)
 
 	tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
-	concentrations = concentrations + fill_river_conc(tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], rivers, old_rivers) #, only_one=True
+	concentrations = concentrations + fill_river_conc(tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], rivers, old_rivers, fixed_conc=1.)
 	print(type(concentrations), len(concentrations))
 
 	write_binary_files(relax_salt, mask_salt, concentrations, out_dir=args.domdir, conc_path='CONC.bin',
