@@ -85,7 +85,7 @@ def open_point_sources(
 	Given the json of a specific domain's point sources,
 	reads the data within.
 	"""
-
+	
 	with open(json_file, 'r') as jfile:
 		jdata = json.load(jfile)
 	return jdata['discharge_points']
@@ -132,7 +132,9 @@ def fill_sal_conc(
 	"""
 
 	n_sources = len(json_data)
-	conc_list = [conc] * n_sources
+	conc_list = []
+	for ns in range(n_sources):
+		conc_list.append(conc * 0)
 
 	for ns, jd in enumerate(json_data):
 		lon = jd['Long']
@@ -191,18 +193,18 @@ def fill_river_conc(
 			j -= 1
 		k = np.argmin(np.abs(z.values - depth[j, i].values))
 		print(j, i)
-		if fixed_conc == None:
-			try:
-				cntr = 0
-				while discharge_json[cntr]['rivername'] != jd['name']:
-					cntr += 1
+		try:
+			cntr = 0
+			while discharge_json[cntr]['rivername'] != jd['name']:
+				cntr += 1
+			if fixed_conc == None:
 				c = discharge_json[cntr]['MEAN_2011_2023'] * uniform_concentration
-			except:
-				c = 50.e3
-		elif isinstance(fixed_conc, float):
-			c = fixed_conc
+			elif isinstance(fixed_conc, float):
+				c = fixed_conc
+		except:
+			c = 50.e3
 		#relax_sal[k, j, i] = rel_S
-		conc_list[ns][j,i] += c
+		conc_list[ns][j,i] = c
 		print(conc_list[ns].max().values)
 	print(np.unique(conc_list[1] == conc_list[0]))
 	return conc_list #relax_sal, xr.where(relax_sal == 0., 0., 1.), conc
