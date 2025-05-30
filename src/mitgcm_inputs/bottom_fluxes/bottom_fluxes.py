@@ -69,6 +69,26 @@ BENTHIC_FLUXES = MappingProxyType(
 )
 
 
+FLUX_PARAMETERS = {
+    BenthicVar.N: {
+        "depth_start_decay": 25.0,
+        "depth_zero_flux": 75.0,
+        "exp_coeff": 4,
+    },
+    BenthicVar.P: {
+        "depth_start_decay": 25.0,
+        "depth_zero_flux": 75.0,
+        "exp_coeff": 4,
+        "multiplication_factor": 2.0,
+    },
+    BenthicVar.O: {
+        "depth_start_decay": 15.0,
+        "depth_zero_flux": 50.0,
+        "exp_coeff": 4,
+    },
+}
+
+
 def time_variability_factor(t: np.ndarray | Real, _benthic_var: BenthicVar):
     """
     Generate a coefficient that represents the yearly variability of benthic
@@ -96,9 +116,10 @@ def time_variability_factor(t: np.ndarray | Real, _benthic_var: BenthicVar):
 def depth_variability_factor(
     depth: np.ndarray | Real,
     benthic_var: BenthicVar,
-    depth_start_decay: float = 10.0,
-    depth_zero_flux: float = 50.0,
-    exp_coeff: int = 3,
+    depth_start_decay: float = 25.0,
+    depth_zero_flux: float = 75.0,
+    exp_coeff: int = 4,
+    multiplication_factor: float = 1.0,
 ):
     """
     Compute a coefficient that represents the vertical variability of benthic
@@ -120,6 +141,8 @@ def depth_variability_factor(
             flux will decrease linearly from `depth_start_decay` to
             `depth_zero_flux`. If it is 2, the flux will decrease quadratically
             and so on.
+        multiplication_factor: If this value is different from 1, the output
+            of this function will be multiplied by this value.
 
     Returns:
         The value of the benthic flux at the given depth.
@@ -138,7 +161,7 @@ def depth_variability_factor(
     benthic_flux = BENTHIC_FLUXES[benthic_var]
     main_coeff = depth_fraction**exp_coeff
 
-    return benthic_flux * main_coeff
+    return benthic_flux * main_coeff * multiplication_factor
 
 
 def compute_bottom_fluxes(meshmask: Mask):
@@ -159,7 +182,7 @@ def compute_bottom_fluxes(meshmask: Mask):
         LOGGER.debug("Computing bottom fluxes for %s", variable)
         data = np.full(depth.shape, FILL_VALUE, dtype=np.float32)
         data[water_cells] = depth_variability_factor(
-            depth[water_cells], variable
+            depth[water_cells], variable, **FLUX_PARAMETERS.get(variable, {})
         )
         time_coefficients = time_variability_factor(
             np.arange(1, 366), variable
