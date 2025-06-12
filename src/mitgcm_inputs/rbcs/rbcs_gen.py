@@ -101,6 +101,7 @@ def open_river_sources(
 	with open(json_file, 'r') as jfile:
 		jdata = json.load(jfile)
 	return jdata
+#
 
 def open_old_rivers(
 		json_file,
@@ -108,10 +109,9 @@ def open_old_rivers(
 	print(json_file)
 	with open(json_file, 'r') as jfile:
 		jdata = json.load(jfile)
-	return jdata['river_points']
-
-
+	return jdata['rivers']
 #
+
 
 def fill_sal_conc(
 		relax_sal,
@@ -170,14 +170,22 @@ def fill_river_conc(
 	fills the concentration array.
 	"""
 
-	n_sources = len(json_data)
+	#n_sources = len(json_data)
+	n_sources = 0
+	for dr in discharge_json:
+		if 'concentrations' in dr.keys():
+			n_sources += 1
 	conc_list = []
+	print('\n•••••••••••••••\n',n_sources,'\n')
 	for ns in range(n_sources):
 		conc_list.append(conc * 0)
 
+	riv_cntr = 0
 	for ns, jd in enumerate(json_data): #[direc]
 		print('\n')
 		print(ns)
+		print(riv_cntr)
+		print('—————————————————————————————————\n')
 		i = np.array(jd['longitude_indices']) #i = jd['longitude']
 		if isinstance(i, str):
 			rr = range(int(i[2:4]), int(i[-4:-1]))
@@ -195,18 +203,20 @@ def fill_river_conc(
 		print(j, i)
 		try:
 			cntr = 0
-			while discharge_json[cntr]['rivername'] != jd['name']:
+			while discharge_json[cntr]['name'] != jd['name']:
 				cntr += 1
-			if fixed_conc == None:
-				c = discharge_json[cntr]['MEAN_2011_2023'] * uniform_concentration
-			elif isinstance(fixed_conc, float):
-				c = fixed_conc
+			if 'concentrations' in discharge_json[cntr].keys():
+				if fixed_conc == None:
+					c = uniform_concentration
+				elif isinstance(fixed_conc, float):
+					c = fixed_conc
+				conc_list[riv_cntr][j,i] = c
+				riv_cntr += 1
+				print('\t\t', discharge_json[cntr]['name'], jd['name'])
 		except:
-			c = 50.e3
+			print('Warning!')
 		#relax_sal[k, j, i] = rel_S
-		conc_list[ns][j,i] = c
-		print(conc_list[ns].max().values)
-	print(np.unique(conc_list[1] == conc_list[0]))
+		#conc_list[ns][j,i] = c
 	return conc_list #relax_sal, xr.where(relax_sal == 0., 0., 1.), conc
 
 #
@@ -221,7 +231,7 @@ def write_binary_files(
 		conc_path='tracer_concetrations.bin',
 		mask_path='bottom_sources_S_mask.bin',
 		aggreg_path='sewage_discharges.nc',
-		conc_in_time=365,
+		conc_in_time=368,
 ):
 	"""
 	Given the relaxation salinity, salinity mask and concentration
@@ -231,16 +241,16 @@ def write_binary_files(
 	relax_sal.values.astype('f4').tofile(out_dir / relax_path)
 	for i, conc in enumerate(concs):
 		if conc_in_time == 1:
-			conc.values.astype('f4').tofile(out_dir / (conc_path[:-4] + f'{i:02}' + conc_path[-4:]))
+			conc.values.astype('f4').tofile(out_dir / (conc_path[:4] + f'{i+1:02}' + conc_path[4:]))
 		else:
 			np.stack([conc.values] * conc_in_time).astype('f4').tofile(
-				out_dir / (conc_path[:-4] + f'{i:02}' + conc_path[-4:]))
+				out_dir / (conc_path[:4] + f'{i+1:02}' + conc_path[4:]))
 
 	S_mask.values.astype('f4').tofile(out_dir / mask_path)
 
 	if aggregated:
 		xr.merge([S_mask.rename('salinity_mask'), relax_sal.rename('relax_salinity')] +
-				 [conc.rename(f'CONC{i:02}') for i, conc in enumerate(concs)]).to_netcdf(out_dir / aggreg_path)
+				 [conc.rename(f'CONC{i+1:02}') for i, conc in enumerate(concs)]).to_netcdf(out_dir / aggreg_path)
 
 
 #
@@ -268,7 +278,8 @@ def main():
 
 	# rivers
 	rivers_path = args.domdir / f'rivers_positions_{domain}.json'
-	old_rivers_path = args.inputdir / f'RiverSource_{domain}.json'
+	#old_rivers_path = args.inputdir / f'RiverSource_{domain}.json'
+	old_rivers_path = args.inputdir / f'{domain}.json'
 	rivers = open_river_sources(rivers_path)
 	old_rivers = open_old_rivers(old_rivers_path)
 
@@ -276,7 +287,7 @@ def main():
 	concentrations = concentrations + fill_river_conc(tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], rivers, old_rivers, fixed_conc=1.)
 	print(type(concentrations), len(concentrations))
 
-	write_binary_files(relax_salt, mask_salt, concentrations, out_dir=args.domdir, conc_path='CONC.bin',
+	write_binary_files(relax_salt, mask_salt, concentrations, out_dir=args.domdir, conc_path='conc_bottom_fluxes.bin',
 					   aggreg_path='check_fluxes.nc')
 
 
