@@ -135,13 +135,30 @@ def fill_sal_conc(
 	conc_list = []
 	for ns in range(n_sources):
 		conc_list.append(conc * 0)
+	
+	Lon, Lat = np.meshgrid(x, y)
+	Lon *= np.where(depth == 0., np.nan, 1)
+	Lat *= np.where(depth == 0., np.nan, 1)
 
 	for ns, jd in enumerate(json_data):
 		lon = jd['Long']
 		lat = jd['Lat']
-		i = np.argmin(np.abs(x.values - lon))
-		j = np.argmin(np.abs(y.values - lat))
-		k = np.argmin(np.abs(z.values + depth[j,i].values))
+		#i = np.argmin(np.abs(x.values - lon))
+		#j = np.argmin(np.abs(y.values - lat))
+		
+		idx = np.nanargmin((Lon - lon)**2 + (Lat - lat)**2)
+		j, i = idx//len(x.values), idx%len(x.values)
+		k = np.argmin(np.abs(z.values - depth[j,i].values)) ### can we stop changing sign to the bathymetry?
+		#k = np.argmin(np.abs(z.values - jd['CMS_depth']))
+		print(x[i].values, y[j].values)
+		print(z[k].values, depth[j,i].values)
+		#while z[k] > depth[j,i]:
+		#	k =- 1
+		print('•••••••••••••••••••••••••••v')
+		print(jd['Codice_Scarico'])
+		print(z.values)
+		print(depth[j,i].values)
+		print('•••••••••••••••••••••••••••v')
 		rel_S = jd['CMS_avgS'] - water_freshener
 		if fixed_conc == 'None':
 			c = jd['Carico_Ingresso_AE'] * jd['Dilution_factor']
