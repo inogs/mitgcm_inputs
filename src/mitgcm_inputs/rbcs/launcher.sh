@@ -20,12 +20,10 @@ do
         mv ${dom}.json ${JSON_DIR}/${dom}.json
 done
 
-#python scarichi_json_gen.py -i $PWD/Allegato_1_Capitolato_Tecnico_B32_B35_scarichi.xlsx -o $JSON_DIR ###
-#python fiumi_json_gen.py -i $PWD/listaFIUMI_MER.xlsx -o $JSON_DIR ###
+my_prex_or_die "python scarichi_json_gen.py -i $PWD/Allegato_1_Capitolato_Tecnico_B32_B35_scarichi.xlsx -o $JSON_DIR"
+my_prex_or_die "python fiumi_json_gen.py -i $PWD/listaFIUMI_MER.xlsx -o $JSON_DIR"
 
-for dom in ${domains}
-do
-        python -u rbcs_gen.py -i $JSON_DIR -d ${dom} --domdir $PWD/${dom}
-        echo ${dom}" done!"
+for dom in ${domains} ; do
+        my_prex_or_die "python -u rbcs_gen.py -i $JSON_DIR -d ${dom} --domdir $PWD/${dom}"
 done
 
