@@ -41,7 +41,7 @@ OUTDIR = args.outdir
 
 # select the n. of domain from 1 to 7 and name the json file
 
-domains=['NAD','SAD','ION','SIC','TYR','LIG','SAR', 'GoT', 'GSN']
+domains=['NAD','SAD','ION','SIC','TYR','LIG','SAR', 'GOT', 'GSN']
 
 # Read the Excel file into a DataFrame
 df = pd.read_excel(excel_file)

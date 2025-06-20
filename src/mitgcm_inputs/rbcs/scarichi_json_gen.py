@@ -42,7 +42,7 @@ import copernicusmarine as cm
 excel_file = args.inputfile
 OUTDIR = args.outdir
 
-domains=['NAD','SAD','ION','SIC','TYR','LIG','SAR', 'GoT', 'GSN']
+domains=['NAD','SAD','ION','SIC','TYR','LIG','SAR', 'GOT', 'GSN']
 
 
 # subset and read CMS reanalysis for salinity

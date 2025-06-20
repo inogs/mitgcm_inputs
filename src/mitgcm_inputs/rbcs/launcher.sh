@@ -3,6 +3,8 @@
 ## clean
 #rm *static*
 
+. ./profile.inc
+
 JSON_DIR=$PWD/JSON_DIR
 mkdir -p $JSON_DIR
 
