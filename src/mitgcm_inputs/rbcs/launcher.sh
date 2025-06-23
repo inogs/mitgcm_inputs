@@ -23,9 +23,20 @@ do
 done
 
 my_prex_or_die "python scarichi_json_gen.py -i $PWD/Allegato_1_Capitolato_Tecnico_B32_B35_scarichi.xlsx -o $JSON_DIR"
-my_prex_or_die "python fiumi_json_gen.py -i $PWD/listaFIUMI_MER.xlsx -o $JSON_DIR"
 
 for dom in ${domains} ; do
         my_prex_or_die "python -u rbcs_gen.py -i $JSON_DIR -d ${dom} --domdir $PWD/${dom}"
 done
 
+
+# generation of files for https://medeaf.ogs.it/internal-validation/gbolzon/MER/Domain_static_data
+for dom in ${domains} ; do
+        cd ${dom}
+        mkdir -p conc relax
+        mv conc*bin conc/
+        mv bottom*bin relax/
+        tar -cf conc.tar conc/
+        tar -cf relax.tar relax/
+        gzip -c conc.tar > conc.tar.gz && rm -f conc.tar
+        gzip -c relax.tar > relax.tar.gz && rm -f relax.tar
+done
