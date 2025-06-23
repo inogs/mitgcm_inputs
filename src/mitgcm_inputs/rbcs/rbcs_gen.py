@@ -4,6 +4,13 @@ from bitsea.utilities.argparse_types import existing_dir_path
 
 def argument():
 	parser = argparse.ArgumentParser(description = """
+	Generates RBCs files
+	- bottom_sources_S_mask.bin
+	- bottom_sources_S_relaxation.bin
+	- conc01_bottom_fluxes.bin
+	- conc02_bottom_fluxes.bin
+	- ...
+	- check_fluxes.nc
     """)
 	parser.add_argument(
         '--inputdir', '-i',
@@ -243,31 +250,41 @@ def write_binary_files(
 		S_mask,
 		concs,
 		out_dir,
-		aggregated=True,
-		relax_path='bottom_sources_S_relaxation.bin',
-		conc_path='tracer_concetrations.bin',
-		mask_path='bottom_sources_S_mask.bin',
-		aggreg_path='sewage_discharges.nc',
 		conc_in_time=368,
 ):
 	"""
+	Args:
+	- relax_sal : ndarray [depth,lat,lon] values to relax to
+	- S_mask    : ndarray [depth,lat,lon] of 0.0 1.0 (float)
+	- concs     : list of arrays [lat,lon] with sources concentrations
+
+
 	Given the relaxation salinity, salinity mask and concentration
-	arrays, writes them to MITgcm-appropriate binary files.
+	arrays, writes them to MITgcm-appropriate binary files:
+	- bottom_sources_S_mask.bin
+	- bottom_sources_S_relaxation.bin
+	- conc01_bottom_fluxes.bin
+	- conc02_bottom_fluxes.bin
+	- ...
+	- check_fluxes.nc
+
+	Conc files are replicated 'conc_in_time' times
 	"""
 
-	relax_sal.values.astype('f4').tofile(out_dir / relax_path)
+	relax_sal.values.astype('f4').tofile(out_dir / 'bottom_sources_S_relaxation.bin')
 	for i, conc in enumerate(concs):
 		if conc_in_time == 1:
-			conc.values.astype('f4').tofile(out_dir / (conc_path[:4] + f'{i+1:02}' + conc_path[4:]))
+			conc.values.astype('f4').tofile(out_dir / f'conc{i+1:02}_bottom_fluxes.bin')
 		else:
 			np.stack([conc.values] * conc_in_time).astype('f4').tofile(
-				out_dir / (conc_path[:4] + f'{i+1:02}' + conc_path[4:]))
+				out_dir / f'conc{i+1:02}_bottom_fluxes.bin')
 
-	S_mask.values.astype('f4').tofile(out_dir / mask_path)
+	S_mask.values.astype('f4').tofile(out_dir / 'bottom_sources_S_mask.bin')
 
-	if aggregated:
-		xr.merge([S_mask.rename('salinity_mask'), relax_sal.rename('relax_salinity')] +
-				 [conc.rename(f'CONC{i+1:02}') for i, conc in enumerate(concs)]).to_netcdf(out_dir / aggreg_path)
+
+    #check
+	xr.merge([S_mask.rename('salinity_mask'), relax_sal.rename('relax_salinity')] +
+		[conc.rename(f'CONC{i+1:02}') for i, conc in enumerate(concs)]).to_netcdf(out_dir / "check_fluxes.nc")
 
 
 #
@@ -291,11 +308,9 @@ def main():
 	coords = get_spatial_masks(xr.open_dataset(inputfile))
 
 	relax_salt, mask_salt, concentrations = fill_sal_conc(relax_salt, tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], sewers, fixed_conc=1.)
-	#write_binary_files(relax_salt, mask_salt, tracer_conc, out_dir=args.domdir, conc_path='conc01_bottom_fluxes.bin',)
 
 	# rivers
 	rivers_path = args.domdir / f'rivers_positions_{domain}.json'
-	#old_rivers_path = args.inputdir / f'RiverSource_{domain}.json'
 	old_rivers_path = args.inputdir / f'{domain}.json'
 	rivers = open_river_sources(rivers_path)
 	old_rivers = open_old_rivers(old_rivers_path)
@@ -304,8 +319,7 @@ def main():
 	concentrations = concentrations + fill_river_conc(tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], rivers, old_rivers, fixed_conc=1.)
 	print(type(concentrations), len(concentrations))
 
-	write_binary_files(relax_salt, mask_salt, concentrations, out_dir=args.domdir, conc_path='conc_bottom_fluxes.bin',
-					   aggreg_path='check_fluxes.nc')
+	write_binary_files(relax_salt, mask_salt, concentrations, out_dir=args.domdir)
 
 
 
@@ -314,6 +328,6 @@ def main():
 #
 if __name__ == '__main__':
 	main()
-	print('DONE!')
+
 
 
