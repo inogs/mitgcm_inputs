@@ -8,7 +8,7 @@
 JSON_DIR=$PWD/JSON_DIR
 mkdir -p $JSON_DIR
 
-domains="ION LIG NAD SAD SAR SIC TYR" #GOT GSN 
+domains="ION LIG NAD SAD SAR SIC TYR GOT GSN" 
 URL=https://medeaf.ogs.it/internal-validation/gbolzon/MER/Domain_static_data
 
 for dom in ${domains}
