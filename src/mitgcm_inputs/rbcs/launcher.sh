@@ -28,18 +28,3 @@ for dom in ${domains} ; do
         my_prex_or_die "python -u rbcs_gen.py -i $JSON_DIR -d ${dom} --domdir $PWD/${dom}"
 done
 
-
-# generation of files for https://medeaf.ogs.it/internal-validation/gbolzon/MER/Domain_static_data
-HERE=$PWD
-for dom in ${domains} ; do
-        cd ${dom}
-        echo ${dom}
-        mkdir -p conc relax
-        my_prex "mv conc*bin conc/"
-        my_prex "mv bottom*bin relax/"
-        my_prex_or_die "tar -cf conc.tar conc/"
-        my_prex_or_die "tar -cf relax.tar relax/"
-        my_prex_or_die "gzip -c conc.tar > conc.tar.gz && rm -f conc.tar"
-        my_prex_or_die "gzip -c relax.tar > relax.tar.gz && rm -f relax.tar"
-        cd $HERE
-done
