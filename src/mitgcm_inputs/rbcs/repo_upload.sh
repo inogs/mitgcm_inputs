@@ -20,6 +20,6 @@ for dom in ${domains} ; do
 done
 
 for dom in ${domains} ; do
-   my_prex_or_die "mv {dom}/conc.tar.gz /g100_work/OGS_devC/Benchmark/pub/gbolzon/MER/Domain_static_data/${dom}"
-   my_prex_or_die "mv {dom}/relax.tar.gz /g100_work/OGS_devC/Benchmark/pub/gbolzon/MER/Domain_static_data/${dom}"
+   my_prex_or_die "mv ${dom}/conc.tar.gz /g100_work/OGS_devC/Benchmark/pub/gbolzon/MER/Domain_static_data/${dom}/"
+   my_prex_or_die "mv ${dom}/relax.tar.gz /g100_work/OGS_devC/Benchmark/pub/gbolzon/MER/Domain_static_data/${dom}/"
 done
