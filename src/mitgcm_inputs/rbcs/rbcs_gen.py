@@ -119,6 +119,20 @@ def open_old_rivers(
 	return jdata['rivers']
 #
 
+def fill_sst_mask(
+		hFac,
+):
+	"""
+	Given a 3D field (hFacC from the static data),
+	returns the mask for SST relaxation as a 3D array
+	[depth, lat, lon] filled with 1s in the topmost level
+	and 0s elsewhere
+	"""
+
+	SST_mask = xr.zeros_like(hFac)
+	SST_mask[0,:,:] = 1.
+	return SST_mask.astype('f4')
+#
 
 def fill_sal_conc(
 		relax_sal,
@@ -248,6 +262,7 @@ def fill_river_conc(
 def write_binary_files(
 		relax_sal,
 		S_mask,
+		sst_mask,
 		concs,
 		out_dir,
 		conc_in_time=368,
@@ -256,6 +271,7 @@ def write_binary_files(
 	Args:
 	- relax_sal : ndarray [depth,lat,lon] values to relax to
 	- S_mask    : ndarray [depth,lat,lon] of 0.0 1.0 (float)
+	- sst_mask  : ndarray [depth,lat,lon] of 0.0 1.0 (float)
 	- concs     : list of arrays [lat,lon] with sources concentrations
 
 
@@ -263,6 +279,7 @@ def write_binary_files(
 	arrays, writes them to MITgcm-appropriate binary files:
 	- bottom_sources_S_mask.bin
 	- bottom_sources_S_relaxation.bin
+	- SST_mask.bin
 	- conc01_bottom_fluxes.bin
 	- conc02_bottom_fluxes.bin
 	- ...
@@ -280,10 +297,10 @@ def write_binary_files(
 				out_dir / f'conc{i+1:02}_bottom_fluxes.bin')
 
 	S_mask.values.astype('f4').tofile(out_dir / 'bottom_sources_S_mask.bin')
-
+	sst_mask.values.astype('f4').tofile(out_dir / 'SST_mask.bin')
 
     #check
-	xr.merge([S_mask.rename('salinity_mask'), relax_sal.rename('relax_salinity')] +
+	xr.merge([S_mask.rename('salinity_mask'), relax_sal.rename('relax_salinity'), sst_mask.rename('sst_mask')] +
 		[conc.rename(f'CONC{i+1:02}') for i, conc in enumerate(concs)]).to_netcdf(out_dir / "check_fluxes.nc")
 
 
@@ -307,6 +324,7 @@ def main():
 	tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
 	coords = get_spatial_masks(xr.open_dataset(inputfile))
 
+	SST_mask = fill_sst_mask(xr.open_dataset(inputfile).hFacC)
 	relax_salt, mask_salt, concentrations = fill_sal_conc(relax_salt, tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], sewers, fixed_conc=1.)
 
 	# rivers
@@ -319,7 +337,7 @@ def main():
 	concentrations = concentrations + fill_river_conc(tracer_conc, coords['xc'], coords['yc'], coords['zc'], coords['depth'], rivers, old_rivers, fixed_conc=1.)
 	print(type(concentrations), len(concentrations))
 
-	write_binary_files(relax_salt, mask_salt, concentrations, out_dir=args.domdir)
+	write_binary_files(relax_salt, mask_salt, SST_mask, concentrations, out_dir=args.domdir)
 
 
 
