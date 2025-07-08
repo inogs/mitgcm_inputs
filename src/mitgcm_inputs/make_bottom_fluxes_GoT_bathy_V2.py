@@ -32,10 +32,6 @@ delZ = np.array(
 # print("DetaZ",delZ)
 
 # Load masks
-mask_bottom = np.zeros((p.ny, p.nx), dtype=int)
-mask_qbottom = np.zeros((p.ny, p.nx), dtype=int)
-mask_surface = np.zeros((p.ny, p.nx), dtype=np.float32)
-
 mask_bottom = np.fromfile(
     ptd.mask_path + "mask_bottom_GoT_iNEST_V2", dtype=int
 ).reshape(p.ny, p.nx)
@@ -119,14 +115,16 @@ for var in range(len(p.namef)):
             tflux[t] = np.nansum(bf) * 86400 / 1e9 * p.patom[var]  # [tonn/gg]
         # else:
         # print(tflux[t])
-    yrflux = np.sum(tflux)
-    print(f"{p.namef[var]} integral flux", yrflux)
-    if p.is_plot:
-        plt.figure()
-        plt.pcolor(bf.T)
-        plt.title(f"{p.namef[var]}")
-        plt.colorbar()
 
-        plt.show()
+    if p.nt > 0:
+        yrflux = np.sum(tflux)
+        print(f"{p.namef[var]} integral flux", yrflux)
+        if p.is_plot:
+            plt.figure()
+            plt.pcolor(bf.T)
+            plt.title(f"{p.namef[var]}")
+            plt.colorbar()
+
+            plt.show()
     fidout.close()
 print("Done make_bottom_fluxes_GoT_bathy_V2")
