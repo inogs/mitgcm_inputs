@@ -1,0 +1,10 @@
+{
+  "path": "/g100_work/OGS23_PRACE_IT/apetroni/tides/",
+  "path_tides": "/g100_work/OGS23_PRACE_IT/apetroni/envPy/TIDES/",
+  "path_grid": "/g100_work/OGS23_PRACE_IT/apetroni/tides/grid/run_160p_AZAL_HR_for_grid",
+  "tide": "TPXO10-atlas-v2",
+  "constituents":["m2", "s2", "n2", "k2", "k1", "o1", "p1", "q1"],
+  "boundary":["s","w","e"],
+  "grid":[320,128,50],
+  "debug": false
+}
