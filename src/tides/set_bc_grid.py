@@ -19,7 +19,8 @@ def create_bc_grid(path, dir_in, grid, cbdry):
       nx, first dimension of MITgcm grid, (west-east)
       ny, second  dimension of MITgcm grid (south-north)
       nz, dimension in z (or r)  direction
-      cbdry, character for bdry to generate: s, n, w, e, (south, north, west, east)
+      cbdry, character for bdry to generate: s, n, w, e,
+      (south, north, west, east)
     Output: No output
     The script will generate a grid file named bdry_grid_[snwe].mat
     """
@@ -134,7 +135,7 @@ def create_bc_grid(path, dir_in, grid, cbdry):
             ).item()
             for name, arr in loaded_array.items():
                 print("loaded_array:\n", name, arr.shape)
-            # or_mat_file = sio.loadmat(                path_grid + "bdry_grid_" + cbdry + ".mat"            )
+            # or_mat_file = sio.loadmat(path_grid + "bdry_grid_"+cbdry+".mat")
     return
 
 
@@ -205,8 +206,7 @@ def main(grid, boundary, path, path_grid):
     ny = grid[1]
     nz = grid[2]
     print("Generating grid BC files, \n the grid size: ", nx, ny, nz)
-    dir_in = path_grid  #'/g100_work/OGS23_PRACE_IT/apetroni/tides/grid/run_160p_AZAL_HR_for_grid'
-
+    dir_in = path_grid
     print("From: \n ", dir_in)
 
     for cbdry in bc_list:
@@ -221,9 +221,13 @@ if __name__ == "__main__":
     if Path(json_path).exists():
         with open(json_path) as f:
             default_config = json.load(f)
-    # if present set up argparse that overrides JSON , using others JSON defaults
+    # if present set up argparse that overrides JSON
     parser = argparse.ArgumentParser(
-        description="Script for preparing the bc grid for the tidal boundary condition for MITgcm (*.obcs)\ninputs can be provided by json dictionary and/or by command line,ls\nthese overide json inputs."
+        description=(
+            "Script for preparing the bc grid for the tidal boundary\
+        condition for MITgcm (*.obcs)\ninputs can be provided by\
+        json dictionary and/or by command line,ls\nthese overide json inputs."
+        )
     )
 
     parser.add_argument(
@@ -231,15 +235,21 @@ if __name__ == "__main__":
         default=default_config.get(
             "path", "/g100_work/OGS23_PRACE_IT/apetroni/tides/"
         ),
-        help="path to tide MITgcm grid boundary (default: /g100_work/OGS23_PRACE_IT/apetroni/tides/)",
+        help=(
+            "path to tide MITgcm grid boundary\
+            (default: /g100_work/OGS23_PRACE_IT/apetroni/tides/)"
+        ),
     )
     parser.add_argument(
         "--path_grid",
         default=default_config.get(
             "path_grid",
-            "/g100_work/OGS23_PRACE_IT/apetroni/tides/grid/run_160p_AZAL_HR_for_grid",
+            "/g100_work/OGS23_PRACE_IT/apetroni/tides/\
+                    grid/run_160p_AZAL_HR_for_grid",
         ),
-        help="path to mitGCM grid (default: '/g100_work/OGS23_PRACE_IT/apetroni/tides/grid/run_160p_AZAL_HR_for_grid')",
+        help="path to mitGCM grid (default:\
+             '/g100_work/OGS23_PRACE_IT/apetroni/tides/\
+             grid/run_160p_AZAL_HR_for_grid')",
     )
     parser.add_argument(
         "--boundary",
