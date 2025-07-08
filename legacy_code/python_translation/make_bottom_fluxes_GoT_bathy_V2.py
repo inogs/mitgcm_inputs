@@ -4,8 +4,8 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-import mitgcm_inputs.parameters as p
-import mitgcm_inputs.pathes_to_data as ptd
+import legacy_code.python_translation.parameters as p
+import legacy_code.python_translation.pathes_to_data as ptd
 
 
 def check_z_levels(lev, nz):
@@ -64,7 +64,8 @@ print("Depth limits ", np.min(btm), np.max(btm))
 # minlev=28; % 28(AZAL_HR)=~25 m; 3.00 (profondità minima)
 minlev = 18  # 18(GoT_iNEST)=~15 m; 3.00 (profondità minima)
 mindepth = np.sum(delZ[:minlev])
-# levlim=15; % -> ~70 m; levlim=12(AZAL) -> W-Interf. bottom 48.8900 (limite dei ~50 m)
+# (limite dei ~50 m)
+# levlim=15; % -> ~70 m; levlim=12(AZAL) -> W-Interf. bottom 48.8900
 # levlim=45; % -> ~70 m; levlim=42(AZAL_HR) -> limite dei ~50 m
 levlim = 37  # -> ~35 m; levlim=37(GoT_iNEST) -> limite dei ~35 m
 exp = 4

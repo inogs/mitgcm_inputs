@@ -6,6 +6,12 @@ physical and biogeochemical properties of a geographical domain.
 These files are specifically designed for data that has been discretized
 using the [`bathytool`](https://github.com/inogs/bathytools) software.
 
+**Note:**
+This repository uses git LFS; please remember to execute
+```bash
+git lfs pull
+```
+after having cloned it.
 
 ### Instructions for Developers
 This project uses **Poetry** as its package manager. To set up your

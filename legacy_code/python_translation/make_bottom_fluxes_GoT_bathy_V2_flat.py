@@ -4,8 +4,8 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-import mitgcm_inputs.parameters as p
-import mitgcm_inputs.pathes_to_data as ptd
+import legacy_code.python_translation.parameters as p
+import legacy_code.python_translation.pathes_to_data as ptd
 
 
 def check_z_levels(lev, nz):
@@ -34,9 +34,6 @@ delZ = np.array(
 mask_bottom = np.fromfile(
     ptd.mask_path + "mask_bottom_GoT_iNEST_V2", dtype=int
 ).reshape(p.ny, p.nx)
-mask_qbottom = np.fromfile(
-    ptd.mask_path + "mask_qbottom_GoT_iNEST_V2", dtype=int
-).reshape(p.ny, p.nx)
 mask_surface = np.fromfile(
     ptd.mask_path + "mask_surface_GoT_iNEST_V2", dtype="float32"
 ).reshape(p.ny, p.nx)
@@ -53,7 +50,8 @@ btm = np.fromfile("Depth.data", dtype="float32").reshape(p.ny, p.nx)
 # minlev=19; % 19(AZAL_HR)=~15 m; 3.00 (profondità minima)
 minlev = 15  # 15(GoT_iNEST)=~11 m; 3.00 (profondità minima)
 mindepth = np.sum(delZ[:minlev])
-# levlim=15; % -> ~70 m; levlim=12(AZAL) -> W-Interf. bottom 48.8900 (limite dei ~50 m)
+# W-Interf. bottom 48.8900 (limite dei ~50 m)
+# levlim=15; % -> ~70 m; levlim=12(AZAL)
 # levlim=45; % -> ~70 m; levlim=42(AZAL_HR) -> limite dei ~50 m
 levlim = 37  # -> ~35 m; levlim=37(GoT_iNEST) -> limite dei ~35 m
 exp = 3

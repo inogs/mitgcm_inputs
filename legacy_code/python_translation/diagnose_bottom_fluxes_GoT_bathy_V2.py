@@ -4,8 +4,8 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-import mitgcm_inputs.parameters as p
-import mitgcm_inputs.pathes_to_data as ptd
+import legacy_code.python_translation.parameters as p
+import legacy_code.python_translation.pathes_to_data as ptd
 
 # diagnose bottom fluxes (no point sources)
 print("Start diagnose_bottom_fluxes_GoT_bathy_V2")
@@ -33,7 +33,7 @@ for var in range(len(p.namef)):
     elif p.namef[var] == "P":
         fidin = open(
             f"{p.namef[var]}_bottom_fluxes_GoT_iNEST_V2_x2.dat", "rb"
-        )  ## io ho solo x2
+        )  # io ho solo x2
     else:
         fidin = open(
             f"{p.namef[var]}_bottom_fluxes_GoT_iNEST_V2_flat.dat", "rb"
@@ -77,7 +77,8 @@ for var in range(len(p.namef)):
                 np.repeat(np.mean(tbflux[165, stat, :], axis=0), 365), "--r"
             )
         plt.title(
-            f"mean bottom flux of {p.namef[var]} = {np.mean(mbflux):.2f} [mmol/m^2/s]"
+            f"mean bottom flux of {p.namef[var]} = "
+            f"{np.mean(mbflux):.2f} [mmol/m^2/s]"
         )
         plt.show()
         plt.savefig(f"time_series_flux_transect_{p.namef[var]}.png", dpi=600)

@@ -7,10 +7,12 @@ readme = "README.md"
 packages = [{include = "mitgcm_inputs", from = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.12"
-numpy = "^2.2.2"
+python = "^3.10"
+numpy = "^2.1.3"
+scipy = "^1.15.2"
+bitsea = { git = "https://github.com/inogs/bit.sea.git", branch = "master" }
+xarray = "^2025.1.2"
 matplotlib = "^3.10.0"
-scipy = "^1.15.1"
 pytmd  ="^2.2.5"
 julian ="^0.14"
 
