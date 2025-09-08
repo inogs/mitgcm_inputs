@@ -7,6 +7,7 @@ def argument():
 	Generates RBCs files
 	- bottom_sources_S_mask.bin
 	- bottom_sources_S_relaxation.bin
+    - SST_mask.bin
 	- conc01_bottom_fluxes.bin
 	- conc02_bottom_fluxes.bin
 	- ...
@@ -300,8 +301,12 @@ def write_binary_files(
 	sst_mask.values.astype('f4').tofile(out_dir / 'SST_mask.bin')
 
     #check
-	xr.merge([S_mask.rename('salinity_mask'), relax_sal.rename('relax_salinity'), sst_mask.rename('sst_mask')] +
-		[conc.rename(f'CONC{i+1:02}') for i, conc in enumerate(concs)]).to_netcdf(out_dir / "check_fluxes.nc")
+	xr.merge([
+		S_mask.rename('salinity_mask'),
+		relax_sal.rename('relax_salinity'),
+		sst_mask.rename('sst_mask')] +
+		[conc.rename(f'CONC{i+1:02}') for i, conc in enumerate(concs)]
+		).to_netcdf(out_dir / "check_fluxes.nc")
 
 
 #
