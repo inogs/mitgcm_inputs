@@ -1,7 +1,8 @@
 import argparse
 from bitsea.utilities.argparse_types import existing_file_path
 from bitsea.utilities.argparse_types import existing_dir_path
-
+import xarray as xr
+from pathlib import Path
 
 
 def argument():
@@ -44,7 +45,6 @@ OUTDIR = args.outdir
 
 domains=['NAD','SAD','ION','SIC','TYR','LIG','SAR', 'GOT', 'GSN']
 
-
 # subset and read CMS reanalysis for salinity
 x0, x1 = 6.5000, 21.0000
 y0, y1 = 35.0000, 45.80859375
@@ -53,58 +53,72 @@ z0, z1 = 1.0182366371154785, 5754.
 t0 = '2012-01-01T00:00:00'
 t1 = '2021-12-31T00:00:00'
 
-dataset = 'med-cmcc-sal-rean-d'
-var = 'so'
+def load_datasets(x0, x1, y0, y1, z1):
 
-sal = cm.open_dataset(
-    dataset_id = dataset,
-    #dataset_version = version,
-    username = '',
-    password = '',
-    variables = [var],
-    minimum_longitude = x0,
-    maximum_longitude = x1,
-    minimum_latitude = y0,
-    maximum_latitude = y1,
-    start_datetime = t0,
-    end_datetime = t1,
-    minimum_depth = z0,
-    maximum_depth = z1,
-)
+    dataset = 'med-cmcc-sal-rean-d'
+    var = 'so'
 
-Lon, Lat = np.meshgrid(sal.longitude.values, sal.latitude.values)
-Lon = Lon * np.where(sal.so[0,0,:,:] == sal.so[0,0,:,:], 1, np.nan)
-Lat = Lat * np.where(sal.so[0,0,:,:] == sal.so[0,0,:,:], 1, np.nan)
+    sal = cm.open_dataset(
+        dataset_id = dataset,
+        #dataset_version = version,
+        username = '',
+        password = '',
+        variables = [var],
+        minimum_longitude = x0,
+        maximum_longitude = x1,
+        minimum_latitude = y0,
+        maximum_latitude = y1,
+        start_datetime = t0,
+        end_datetime = t1,
+        minimum_depth = z0,
+        maximum_depth = z1,
+    )
 
-#import matplotlib.pyplot as plt
-#import cmocean as cmo
-#sal.so[0,0,:,:].plot.imshow(); plt.show()
+    Lon, Lat = np.meshgrid(sal.longitude.values, sal.latitude.values)
+    Lon = Lon * np.where(sal.so[0,0,:,:] == sal.so[0,0,:,:], 1, np.nan)
+    Lat = Lat * np.where(sal.so[0,0,:,:] == sal.so[0,0,:,:], 1, np.nan)
 
-dataset = 'cmems_mod_med_phy_my_4.2km_static'
-var = 'deptho_lev'
+    #import matplotlib.pyplot as plt
+    #import cmocean as cmo
+    #sal.so[0,0,:,:].plot.imshow(); plt.show()
 
-bathyCMS = cm.open_dataset(
-    dataset_id = dataset,
-    #dataset_version = version,
-    username='',
-    password='',
-    variables = [var],
-    minimum_longitude = x0,
-    maximum_longitude = x1,
-    minimum_latitude = y0,
-    maximum_latitude = y1,
-    minimum_depth = z0,
-    maximum_depth = z1,
-)['deptho_lev']
+    dataset = 'cmems_mod_med_phy_my_4.2km_static'
+    var = 'deptho_lev'
 
-print('Loaded datasets!')
+    bathyCMS = cm.open_dataset(
+        dataset_id = dataset,
+        #dataset_version = version,
+        username='',
+        password='',
+        variables = [var],
+        minimum_longitude = x0,
+        maximum_longitude = x1,
+        minimum_latitude = y0,
+        maximum_latitude = y1,
+        minimum_depth = z0,
+        maximum_depth = z1,
+    )['deptho_lev']
+
+    print('Loaded datasets!')
+    return sal, bathyCMS, Lon, Lat
 
 
 # Read the Excel file into a DataFrame
 df = pd.read_excel(excel_file)
 
-for id, namedomain in enumerate(domains):
 
+inputdir="/leonardo_work/OGS_test2528_0/MER/mitgcm_inputs/src/mitgcm_inputs/rbcs/"
+for id, namedomain in enumerate(domains):
+    staticfile= Path(f"{inputdir}/{namedomain}/MIT_static_{namedomain}.nc")
+    with xr.open_dataset(staticfile) as ds:
+        lon = ds['XC'].values
+        lat = ds['YC'].values
+        depth = ds['Depth'].values
+    x0, x1 = lon.min()-0.5, lon.max()+0.5
+    y0, y1 = lat.min()-0.5, lat.max()+0.5
+    z1 = depth.max() + 10.
+    sal, bathyCMS, Lon, Lat = load_datasets(x0, x1, y0, y1, z1)
+    print(f"Processing domain {namedomain} ({id+1}/{len(domains)}) ...")
     # Filter rows where the value in column 'Dominio' is id+1 (valid number from 1 to 7)
     if id < 7:
         filtered_df = df[df['Dominio'] == id + 1]
