@@ -1,6 +1,8 @@
 import argparse
 from bitsea.utilities.argparse_types import existing_file_path
 from bitsea.utilities.argparse_types import existing_dir_path
+from bitsea.commons.mask import Mask
+from bitsea.commons.grid import RegularGrid
 import xarray as xr
 from pathlib import Path
 
@@ -24,6 +26,13 @@ def argument():
         help="Scarichi, sewage discharge locations "
     )
     parser.add_argument(
+        '--maskdir', '-m',
+        type=existing_dir_path,
+        default="",
+        required=True,
+        help="Directory containing GSN/meshmask.nc GOT/meshmask.nc etc. "
+    )
+    parser.add_argument(
         '--outdir', '-o',
         type=existing_dir_path,
         required=True,
@@ -45,17 +54,11 @@ OUTDIR = args.outdir
 
 domains=['NAD','SAD','ION','SIC','TYR','LIG','SAR', 'GOT', 'GSN']
 
-# subset and read CMS reanalysis for salinity
-x0, x1 = 6.5000, 21.0000
-y0, y1 = 35.0000, 45.80859375
-z0, z1 = 1.0182366371154785, 5754.
-
-t0 = '2012-01-01T00:00:00'
-t1 = '2021-12-31T00:00:00'
 
 def load_datasets(x0, x1, y0, y1, z1):
-
-    dataset = 'med-cmcc-sal-rean-d'
+    t0 = '2012-01-01T00:00:00'
+    t1 = '2021-12-31T00:00:00'
+    dataset = 'med-cmcc-sal-rean-m'
     var = 'so'
 
     sal = cm.open_dataset(
@@ -70,13 +73,10 @@ def load_datasets(x0, x1, y0, y1, z1):
         maximum_latitude = y1,
         start_datetime = t0,
         end_datetime = t1,
-        minimum_depth = z0,
+        minimum_depth = 1.0182366371154785,
         maximum_depth = z1,
-    )
+    ).mean(dim='time')
 
-    Lon, Lat = np.meshgrid(sal.longitude.values, sal.latitude.values)
-    Lon = Lon * np.where(sal.so[0,0,:,:] == sal.so[0,0,:,:], 1, np.nan)
-    Lat = Lat * np.where(sal.so[0,0,:,:] == sal.so[0,0,:,:], 1, np.nan)
 
     #import matplotlib.pyplot as plt
     #import cmocean as cmo
@@ -100,55 +100,47 @@ def load_datasets(x0, x1, y0, y1, z1):
     )['deptho_lev']
 
     print('Loaded datasets!')
-    return sal, bathyCMS, Lon, Lat
+    return sal, bathyCMS
 
 
 # Read the Excel file into a DataFrame
 df = pd.read_excel(excel_file)
+filtered_df = df[df['Dominio'] > 0]  ### remove rows with no domain assigned, here we filter the 50 discharges
 
 
-inputdir="/leonardo_work/OGS_test2528_0/MER/mitgcm_inputs/src/mitgcm_inputs/rbcs/"
 for id, namedomain in enumerate(domains):
-    staticfile= Path(f"{inputdir}/{namedomain}/MIT_static_{namedomain}.nc")
-    with xr.open_dataset(staticfile) as ds:
-        lon = ds['XC'].values
-        lat = ds['YC'].values
-        depth = ds['Depth'].values
-    x0, x1 = lon.min()-0.5, lon.max()+0.5
-    y0, y1 = lat.min()-0.5, lat.max()+0.5
-    z1 = depth.max() + 10.
-    sal, bathyCMS, Lon, Lat = load_datasets(x0, x1, y0, y1, z1)
+    maskfile= args.maskdir  / namedomain / "meshmask.nc"
+    M = Mask.from_file(maskfile)
+    x0, x1 = M.lon.min()-0.5, M.lon.max()+0.5
+    y0, y1 = M.lat.min()-0.5, M.lat.max()+0.5
+    z1 = M.zlevels.max() + 10.
+    sal, bathyCMS = load_datasets(x0, x1, y0, y1, z1)
+    grid = RegularGrid(lat=sal.latitude.values, lon=sal.longitude.values)
+    CMSmask = Mask(grid=grid, zlevels=sal.depth.values, mask_array=~np.isnan(sal.so.values))
     print(f"Processing domain {namedomain} ({id+1}/{len(domains)}) ...")
-    # Filter rows where the value in column 'Dominio' is id+1 (valid number from 1 to 7)
-    if id < 7:
-        filtered_df = df[df['Dominio'] == id + 1]
-    else:
-        filtered_df = df[df['Sotto-Dominio'] == 8]  ### hardcoded horribly !!!
     
     # Select only the interesting columns 
     selected_columns = filtered_df[['Codice_Scarico', 'Lat', 'Long','Carico_Ingresso_AE', 'Nome_scarico','Regione']]
-    
+    n_scol = selected_columns.shape[0]
+    good = np.zeros(n_scol, dtype=bool)
+    scol_list = []
     depths = []
     Savg = []
     Sstd = []
     dilut_fac = 1.
-    for scol in range(selected_columns.shape[0]):
-        lat_df = selected_columns.Lat.to_numpy()[scol]
-        lon_df = selected_columns.Long.to_numpy()[scol]
-        #j = np.nanargmin(np.abs(lat_df - sal.latitude.values)) ##
-        #i = np.nanargmin(np.abs(lon_df - sal.longitude.values)) ##
-        idx = np.nanargmin((Lon-lon_df)**2 + (Lat-lat_df)**2)
-        #if np.shape(lon_df) == ():
-        #	j, i = idx//1, idx%1
-        #else:
-        #	j, i = idx//len(lon_df), idx%len(lon_df)
-        j, i = idx//len(sal.longitude.values), idx%len(sal.longitude.values)
-        k = bathyCMS[j, i].values
-        kn = int(np.where(np.isnan(k), 0, k - 1))
-        depths.append(sal.depth[kn].values * k / k)
-        Savg.append(np.mean(sal.so[:, kn, j, i].values * k / k))
-        Sstd.append(np.std(sal.so[:, kn, j, i].values * k / k))
-
+    for iscol in range(n_scol):
+        lat_scol = selected_columns.Lat.to_numpy()[iscol]
+        lon_scol = selected_columns.Long.to_numpy()[iscol]
+        if M.is_inside_domain(lon=lon_scol, lat=lat_scol):
+            print(iscol, lon_scol, lat_scol)
+            i,j = CMSmask.convert_lon_lat_wetpoint_indices(lon=lon_scol, lat=lat_scol)
+            k = int(bathyCMS[j, i].values) - 1  ### bathymetry from CMS        
+            depths.append(sal.depth[k].values.item())
+            Savg.append(sal.so[k, j, i].values.item())
+            Sstd.append(sal.so[k, j, i].values.item())
+            good[iscol] = True
+    
+    selected_columns = selected_columns[good]
     selected_columns.insert(5, "CMS_depth", depths, True)
     selected_columns.insert(6, "CMS_avgS", Savg, True)
     selected_columns.insert(7, "CMS_stdS", Sstd, True)
