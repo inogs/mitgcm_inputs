@@ -1,5 +1,6 @@
 import argparse
 from bitsea.utilities.argparse_types import existing_dir_path
+from bitsea.utilities.argparse_types import existing_file_path
 from pathlib import Path
 import numpy as np
 import xarray as xr
@@ -18,17 +19,18 @@ def argument():
 	- check_fluxes.nc
     """)
 	parser.add_argument(
-        '--inputdir', '-i',
-        type=existing_dir_path,
+        '--sewage', '-s',
+        type=existing_file_path,
         required=True,
-        help="Output of scarichi_json_gen.py "
+        help="Json file output of scarichi_json_gen.py"
     )
 	parser.add_argument(
-        '--domain', '-d',
-        type=str,
+        '--river', '-r',
+        type=existing_file_path,
         required=True,
-        help ="NAD, SAD, ..."
+        help="Json file output got from internal-validation repository"
     )
+
 	parser.add_argument(
         '--domdir',
         type=existing_dir_path,
@@ -170,7 +172,7 @@ def fill_sal_conc(
 		j, i = idx//len(x.values), idx%len(x.values)
 		k = np.argmin(np.abs(z.values - depth[j,i].values)) ### can we stop changing sign to the bathymetry?
 		rel_S = jd['CMS_avgS'] - water_freshener
-		print(rel_S, jd['CMS_avgS'], water_freshener)
+
 		if fixed_conc == 'None':
 			c = jd['Carico_Ingresso_AE'] * jd['Dilution_factor']
 		elif isinstance(fixed_conc, float):
@@ -215,6 +217,8 @@ def fill_river_conc(
 			rr = range(int(i[2:4]), int(i[-4:-1]))
 			i = np.array([ii for ii in rr])
 		j = np.array(jd['latitude_indices']) #j = jd['latitude']
+		# shift indices of one cell downstream according to side of the river to avoid overwriting of
+		# open boundary conditions (which are all zeros by construction for the E. coli concentrations)
 		if jd['side'] == 'E':
 			i -= 1
 		elif jd['side'] == 'W':
@@ -304,15 +308,12 @@ def write_binary_files(
 ###
 
 
-base_path = args.inputdir
-domain = args.domain
 
 if True: #def main():
-	inputfile = args.domdir / ('MIT_static_' + domain + '.nc')
+	inputfile = args.domdir / ('MIT_static.nc')
 
 	# sewage
-	sewage_path = args.inputdir / f'PointSource_{domain}.json'
-	sewers = open_point_sources(sewage_path)
+	sewers = open_point_sources(args.sewage)
 
 	relax_salt = initialise_sal(xr.open_dataset(inputfile).hFacC)
 	tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
@@ -330,10 +331,9 @@ if True: #def main():
 		fixed_conc=1.)
 
 	# rivers
-	rivers_path = args.domdir / f'rivers_positions_{domain}.json'
-	old_rivers_path = args.inputdir / f'{domain}.json'
+	rivers_path = args.domdir / f'rivers_positions.json'
 	rivers = open_river_sources(rivers_path)
-	old_rivers = open_old_rivers(old_rivers_path)
+	old_rivers = open_old_rivers(args.river)
 
 	tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
 	concentrations = concentrations + fill_river_conc(

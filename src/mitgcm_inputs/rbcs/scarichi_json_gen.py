@@ -1,10 +1,14 @@
 import argparse
 from bitsea.utilities.argparse_types import existing_file_path
-from bitsea.utilities.argparse_types import existing_dir_path
+from bitsea.utilities.argparse_types import path_inside_an_existing_dir
 from bitsea.commons.mask import Mask
 from bitsea.commons.grid import RegularGrid
 import xarray as xr
 from pathlib import Path
+import numpy as np
+import pandas as pd
+import json
+import copernicusmarine as cm
 
 
 def argument():
@@ -26,15 +30,20 @@ def argument():
         help="Scarichi, sewage discharge locations "
     )
     parser.add_argument(
-        '--maskdir', '-m',
-        type=existing_dir_path,
-        default="",
+        '--domain', '-d',
+        type=str,
         required=True,
-        help="Directory containing GSN/meshmask.nc GOT/meshmask.nc etc. "
+        help="Domain name (e.g. NAD, SAD, etc.)"
     )
     parser.add_argument(
-        '--outdir', '-o',
-        type=existing_dir_path,
+        '--maskfile', '-m',
+        type=existing_file_path,
+        required=True,
+        help="Path to the mask file"
+    )
+    parser.add_argument(
+        '--outfile', '-o',
+        type=path_inside_an_existing_dir,
         required=True,
     )
 
@@ -44,15 +53,10 @@ def argument():
 args = argument()
 
 
-import numpy as np
-import pandas as pd
-import json
-import copernicusmarine as cm
+
 
 excel_file = args.inputfile
-OUTDIR = args.outdir
 
-domains=['NAD','SAD','ION','SIC','TYR','LIG','SAR', 'GOT', 'GSN']
 
 
 def load_datasets(x0, x1, y0, y1, z1):
@@ -60,6 +64,7 @@ def load_datasets(x0, x1, y0, y1, z1):
     t1 = '2021-12-31T00:00:00'
     dataset = 'med-cmcc-sal-rean-m'
     var = 'so'
+    z0=1.0182366371154785  ### 1 meter depth
 
     sal = cm.open_dataset(
         dataset_id = dataset,
@@ -73,7 +78,7 @@ def load_datasets(x0, x1, y0, y1, z1):
         maximum_latitude = y1,
         start_datetime = t0,
         end_datetime = t1,
-        minimum_depth = 1.0182366371154785,
+        minimum_depth = z0,
         maximum_depth = z1,
     ).mean(dim='time')
 
@@ -108,60 +113,56 @@ df = pd.read_excel(excel_file)
 filtered_df = df[df['Dominio'] > 0]  ### remove rows with no domain assigned, here we filter the 50 discharges
 
 
-for id, namedomain in enumerate(domains):
-    maskfile= args.maskdir  / namedomain / "meshmask.nc"
-    M = Mask.from_file(maskfile)
-    x0, x1 = M.lon.min()-0.5, M.lon.max()+0.5
-    y0, y1 = M.lat.min()-0.5, M.lat.max()+0.5
-    z1 = M.zlevels.max() + 10.
-    sal, bathyCMS = load_datasets(x0, x1, y0, y1, z1)
-    grid = RegularGrid(lat=sal.latitude.values, lon=sal.longitude.values)
-    CMSmask = Mask(grid=grid, zlevels=sal.depth.values, mask_array=~np.isnan(sal.so.values))
-    print(f"Processing domain {namedomain} ({id+1}/{len(domains)}) ...")
-    
-    # Select only the interesting columns 
-    selected_columns = filtered_df[['Codice_Scarico', 'Lat', 'Long','Carico_Ingresso_AE', 'Nome_scarico','Regione']]
-    n_scol = selected_columns.shape[0]
-    good = np.zeros(n_scol, dtype=bool)
-    scol_list = []
-    depths = []
-    Savg = []
-    Sstd = []
-    dilut_fac = 1.
-    for iscol in range(n_scol):
-        lat_scol = selected_columns.Lat.to_numpy()[iscol]
-        lon_scol = selected_columns.Long.to_numpy()[iscol]
-        if M.is_inside_domain(lon=lon_scol, lat=lat_scol):
-            print(iscol, lon_scol, lat_scol)
-            i,j = CMSmask.convert_lon_lat_wetpoint_indices(lon=lon_scol, lat=lat_scol)
-            k = int(bathyCMS[j, i].values) - 1  ### bathymetry from CMS        
-            depths.append(sal.depth[k].values.item())
-            Savg.append(sal.so[k, j, i].values.item())
-            Sstd.append(sal.so[k, j, i].values.item())
-            good[iscol] = True
-    
-    selected_columns = selected_columns[good]
-    selected_columns.insert(5, "CMS_depth", depths, True)
-    selected_columns.insert(6, "CMS_avgS", Savg, True)
-    selected_columns.insert(7, "CMS_stdS", Sstd, True)
-    selected_columns.insert(8, "Dilution_factor", dilut_fac, True)
+namedomain = args.domain
+M = Mask.from_file(args.maskfile)
+x0, x1 = M.lon.min()-0.5, M.lon.max()+0.5
+y0, y1 = M.lat.min()-0.5, M.lat.max()+0.5
+z1 = M.zlevels.max() + 10.
+sal, bathyCMS = load_datasets(x0, x1, y0, y1, z1)
+grid = RegularGrid(lat=sal.latitude.values, lon=sal.longitude.values)
+CMSmask = Mask(grid=grid, zlevels=sal.depth.values, mask_array=~np.isnan(sal.so.values))
 
-    # Convert the selected rows to a list of dictionaries
-    filtered_rows = selected_columns.to_dict(orient='records')
+# Select only the interesting columns
+selected_columns = filtered_df[['Codice_Scarico', 'Lat', 'Long','Carico_Ingresso_AE', 'Nome_scarico','Regione']]
+n_scol = selected_columns.shape[0]
+good = np.zeros(n_scol, dtype=bool)
+scol_list = []
+depths = []
+Savg = []
+Sstd = []
+dilut_fac = 1.
+for iscol in range(n_scol):
+    lat_scol = selected_columns.Lat.to_numpy()[iscol]
+    lon_scol = selected_columns.Long.to_numpy()[iscol]
+    if M.is_inside_domain(lon=lon_scol, lat=lat_scol):
+        print(iscol, lon_scol, lat_scol)
+        i,j = CMSmask.convert_lon_lat_wetpoint_indices(lon=lon_scol, lat=lat_scol)
+        k = int(bathyCMS[j, i].values) - 1  ### bathymetry from CMS
+        depths.append(sal.depth[k].values.item())
+        Savg.append(sal.so[k, j, i].values.item())
+        Sstd.append(sal.so[k, j, i].values.item())
+        good[iscol] = True
 
-    # Create the final JSON structure
-    output_data = {
-        "file_name_origin": excel_file.name,
-        "domain_number": id+1,
-        "domain_name": domains[id],
-        "n_points": len(filtered_rows),
-        "discharge_points": filtered_rows
-    }
-    # build the output file name
-    output_file = OUTDIR / ('PointSource_' + domains[id] + '.json' )
-    # Write the final JSON structure to a JSON file
-    with open(output_file, 'w') as json_file:
-        json.dump(output_data, json_file, indent=4)
-    
-    print(f"JSON file created: {output_file}")
+selected_columns = selected_columns[good]
+selected_columns.insert(5, "CMS_depth", depths, True)
+selected_columns.insert(6, "CMS_avgS", Savg, True)
+selected_columns.insert(7, "CMS_stdS", Sstd, True)
+selected_columns.insert(8, "Dilution_factor", dilut_fac, True)
+
+# Convert the selected rows to a list of dictionaries
+filtered_rows = selected_columns.to_dict(orient='records')
+
+# Create the final JSON structure
+output_data = {
+    "file_name_origin": excel_file.name,
+    "domain_name": namedomain,
+    "n_points": len(filtered_rows),
+    "discharge_points": filtered_rows
+}
+
+# Write the final JSON structure to a JSON file
+with open(args.outfile, 'w') as json_file:
+    json.dump(output_data, json_file, indent=4)
+
+print(f"JSON file created: {args.outfile}")
 
