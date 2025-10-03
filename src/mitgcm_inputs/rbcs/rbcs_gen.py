@@ -254,7 +254,6 @@ def write_binary_files(
 		sst_mask,
 		concs,
 		out_dir : Path,
-		conc_in_time=368,
 ):
 	"""
 	Args:
@@ -273,7 +272,6 @@ def write_binary_files(
 		- ...
 		- check_fluxes.nc
 
-	Conc files are replicated 'conc_in_time' times
 	"""
 
 	filename = out_dir / "bottom_sources_S_relaxation.bin"
@@ -283,7 +281,7 @@ def write_binary_files(
 	for i, conc in enumerate(concs):
 		filename = out_dir / f'conc{i+1:02}_bottom_fluxes.bin'
 		print(filename)
-		(conc.values * conc_in_time).astype('f4').tofile(filename)
+		(conc.values).astype('f4').tofile(filename)
 
 	filename = out_dir / "bottom_sources_S_mask.bin"
 	S_mask.values.astype('f4').tofile(filename)
