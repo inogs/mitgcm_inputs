@@ -199,6 +199,8 @@ def fill_river_conc(
 	Given the info for the point sources and the spatial static data,
 	fills the relaxation salinity array, creates the salinity mask and
 	fills the concentration array.
+	Returns:
+	 conc_list: a list of concentration arrays, one per river source.
 	"""
 
 	#n_sources = len(json_data)
@@ -260,7 +262,7 @@ def write_binary_files(
 		relax_sal : ndarray [depth,lat,lon] values to relax to
 		S_mask    : ndarray [depth,lat,lon] of 0.0 1.0 (float)
 		sst_mask  : ndarray [depth,lat,lon] of 0.0 1.0 (float)
-		concs     : list of arrays [lat,lon] with sources concentrations
+		concs     : list of xr DataArrays [lat,lon] with sources concentrations
 
 	Given the relaxation salinity, salinity mask and concentration
 	arrays, writes them to MITgcm-appropriate binary files:
@@ -318,7 +320,7 @@ if True: #def main():
 	coords = get_spatial_masks(xr.open_dataset(inputfile))
 
 	SST_mask = fill_sst_mask(xr.open_dataset(inputfile).hFacC)
-	relax_salt, mask_salt, concentrations = fill_sal_conc(
+	relax_salt, mask_salt, sew_conc_list = fill_sal_conc(
 		relax_sal=relax_salt,
 		conc=tracer_conc,
 		x=coords['xc'],
@@ -328,13 +330,15 @@ if True: #def main():
 		json_data=sewers,
 		fixed_conc=1.)
 
+	print("len(sew_conc_list):", len(sew_conc_list))
 	# rivers
 	rivers_path = args.domdir / f'rivers_positions.json'
 	rivers = open_river_sources(rivers_path)
 	old_rivers = open_old_rivers(args.river)
 
 	tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
-	concentrations = concentrations + fill_river_conc(
+	
+	river_conc_list=fill_river_conc(
 		conc = tracer_conc,
 		x=coords['xc'],
 		y=coords['yc'],
@@ -343,8 +347,8 @@ if True: #def main():
 		json_data=rivers,
 		discharge_json=old_rivers,
 		fixed_conc=1.)
-
-	write_binary_files(relax_salt, mask_salt, SST_mask, concentrations, out_dir=args.domdir)
+	print("len(river_conc_list):", len(river_conc_list))
+	write_binary_files(relax_salt, mask_salt, SST_mask, sew_conc_list + river_conc_list, out_dir=args.domdir)
 
 
 

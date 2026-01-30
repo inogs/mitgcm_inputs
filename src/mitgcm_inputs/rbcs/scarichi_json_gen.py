@@ -62,7 +62,7 @@ excel_file = args.inputfile
 def load_datasets(x0, x1, y0, y1, z1):
     t0 = '2012-01-01T00:00:00'
     t1 = '2021-12-31T00:00:00'
-    dataset = 'med-cmcc-sal-rean-m'
+    dataset = 'cmems_mod_med_phy-sal_my_4.2km_P1M-m'
     var = 'so'
     z0=1.0182366371154785  ### 1 meter depth
 
