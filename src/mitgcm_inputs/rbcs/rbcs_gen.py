@@ -10,13 +10,38 @@ import json
 def argument():
 	parser = argparse.ArgumentParser(description = """
 	Generates RBCs files
-	- bottom_sources_S_mask.bin
-	- bottom_sources_S_relaxation.bin
-    - SST_mask.bin
+    3D Files:
+	- bottom_sources_S_mask.bin       mask with 1.0 at sewage point sources locations, 0.0 elsewhere
+	- bottom_sources_S_relaxation.bin MDS clim salinity at sewage point sources locations, 0.0 elsewhere
+    - SST_mask.bin   1.0 at surface, 0.0 elsewhere
+
+	2D Files with zero values except at point sources locations:
 	- conc01_bottom_fluxes.bin
 	- conc02_bottom_fluxes.bin
 	- ...
+
+	A check file in netcdf format:
 	- check_fluxes.nc
+
+	A json file mapping tracers indexes to point sources:
+	- RBCS_tracer_names.json
+	{
+    "TRAC52": "Scarico_Trieste_Servola",
+    "TRAC53": "Scarico_Grado",
+    "TRAC54": "Scarico_Depuratore_Di_Staran",
+    "TRAC55": "Timavo",
+    "TRAC56": "Isonzo"
+	}
+
+    Args:
+        --sewage/-s : Json file output of scarichi_json_gen.py
+		--river/-r  : Json file got from bathytools github repository
+		--domdir    : Directory of the domain where
+						- MIT_static.nc is expected
+						- Rivers_positions.json is expected
+						 - output files are dumped
+
+
     """)
 	parser.add_argument(
         '--sewage', '-s',
@@ -28,7 +53,7 @@ def argument():
         '--river', '-r',
         type=existing_file_path,
         required=True,
-        help="Json file output got from internal-validation repository"
+        help="Json file output got from bathytools github repository"
     )
 
 	parser.add_argument(
@@ -350,8 +375,21 @@ if True: #def main():
 	print("len(river_conc_list):", len(river_conc_list))
 	write_binary_files(relax_salt, mask_salt, SST_mask, sew_conc_list + river_conc_list, out_dir=args.domdir)
 
+	# build a dictionary with river concentrations for later use
+	D={}
+	i=51
+	for s in sewers:
+		i += 1
+		name = 'TRAC' + f'{i:02}'
+		D[name] = s['Nome_scarico']
 
+	for r in rivers:
+		i += 1
+		name = 'TRAC' + f'{i:02}'
+		D[name] = r['name']
 
+	with open(args.domdir / 'RBCS_tracer_names.json', 'w') as jfile:
+		json.dump(D, jfile, indent=4)
 
 #
 #
