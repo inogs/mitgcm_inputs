@@ -39,7 +39,7 @@ def argument():
 		--domdir    : Directory of the domain where
 						- MIT_static.nc is expected
 						- Rivers_positions.json is expected
-						 - output files are dumped
+						- output files are dumped
 
 
     """)
@@ -136,7 +136,7 @@ def open_river_sources(
 	return jdata
 #
 
-def open_old_rivers(
+def open_sewage_rivers(
 		json_file,
 ):
 	print("reading" , json_file)
@@ -160,7 +160,7 @@ def fill_sst_mask(
 	return SST_mask.astype('f4')
 #
 
-def fill_sal_conc(
+def get_opensea_swg_buoyant_plume(
 		relax_sal = None,
 		conc = None,
 		x = None,
@@ -208,15 +208,15 @@ def fill_sal_conc(
 
 #
 
-def fill_river_conc(
+def get_river_swg_plume(
 		*,
 		conc = None,
 		x = None,
 		y = None,
 		z = None,
 		depth = None,
-		json_data = None,
-		discharge_json = None,
+		all_rivers = None,
+		sewage_rivers = None,
 		uniform_concentration = 1000.,
 		fixed_conc = None,
 ):
@@ -230,7 +230,7 @@ def fill_river_conc(
 
 	#n_sources = len(json_data)
 	n_sources = 0
-	for dr in discharge_json:
+	for dr in sewage_rivers:
 		if 'concentrations' in dr.keys():
 			n_sources += 1
 	conc_list = []
@@ -238,7 +238,7 @@ def fill_river_conc(
 		conc_list.append(conc * 0)
 
 	riv_cntr = 0
-	for ns, jd in enumerate(json_data): #[direc]
+	for ns, jd in enumerate(all_rivers): #[direc]
 		i = np.array(jd['longitude_indices']) #i = jd['longitude']
 		if isinstance(i, str):
 			rr = range(int(i[2:4]), int(i[-4:-1]))
@@ -257,9 +257,9 @@ def fill_river_conc(
 		k = np.argmin(np.abs(z.values - depth[j, i].values))
 		try:
 			cntr = 0
-			while discharge_json[cntr]['name'] != jd['name']:
+			while sewage_rivers[cntr]['name'] != jd['name']:
 				cntr += 1
-			if 'concentrations' in discharge_json[cntr].keys():
+			if 'concentrations' in sewage_rivers[cntr].keys():
 				if fixed_conc == None:
 					c = uniform_concentration
 				elif isinstance(fixed_conc, float):
@@ -338,57 +338,59 @@ if True: #def main():
 	inputfile = args.domdir / ('MIT_static.nc')
 
 	# sewage
-	sewers = open_point_sources(args.sewage)
+	sewers_opensea = open_point_sources(args.sewage)
 
 	relax_salt = initialise_sal(xr.open_dataset(inputfile).hFacC)
 	tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
 	coords = get_spatial_masks(xr.open_dataset(inputfile))
 
 	SST_mask = fill_sst_mask(xr.open_dataset(inputfile).hFacC)
-	relax_salt, mask_salt, sew_conc_list = fill_sal_conc(
+	relax_salt, mask_salt, opensea_sew_conc_list = get_opensea_swg_buoyant_plume(
 		relax_sal=relax_salt,
 		conc=tracer_conc,
 		x=coords['xc'],
 		y=coords['yc'],
         z=coords['zc'],
 		depth=coords['depth'],
-		json_data=sewers,
+		json_data=sewers_opensea,
 		fixed_conc=1.)
 
-	print("len(sew_conc_list):", len(sew_conc_list))
+	print("len(opensea_sew_conc_list):", len(opensea_sew_conc_list))
 	# rivers
 	rivers_path = args.domdir / f'rivers_positions.json'
-	rivers = open_river_sources(rivers_path)
-	old_rivers = open_old_rivers(args.river)
+	all_rivers = open_river_sources(rivers_path)
+	sewage_rivers = open_sewage_rivers(args.river)
 
 	tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
 	
-	river_conc_list=fill_river_conc(
+	swg_river_conc_list=get_river_swg_plume(
 		conc = tracer_conc,
 		x=coords['xc'],
 		y=coords['yc'],
 		z=coords['zc'],
 		depth=coords['depth'],
-		json_data=rivers,
-		discharge_json=old_rivers,
+		all_rivers=all_rivers,
+		sewage_rivers=sewage_rivers,
 		fixed_conc=1.)
-	print("len(river_conc_list):", len(river_conc_list))
-	write_binary_files(relax_salt, mask_salt, SST_mask, sew_conc_list + river_conc_list, out_dir=args.domdir)
+	print("len(swg_river_conc_list):", len(swg_river_conc_list))
+	write_binary_files(relax_salt, mask_salt, SST_mask, opensea_sew_conc_list + swg_river_conc_list, out_dir=args.domdir)
 
 	# build a dictionary with river concentrations for later use
 	D={}
 	i=51
-	for s in sewers:
+	for s in sewers_opensea:
 		i += 1
 		name = 'TRAC' + f'{i:02}'
 		D[name] = s['Nome_scarico']
 
-	for r in rivers:
+	for r in all_rivers:
 		i += 1
 		name = 'TRAC' + f'{i:02}'
 		D[name] = r['name']
-
-	with open(args.domdir / 'RBCS_tracer_names.json', 'w') as jfile:
+    
+	RBCS_tracer_names_file = args.domdir / 'RBCS_tracer_names.json'
+	with open(RBCS_tracer_names_file, 'w') as jfile:
+		print(RBCS_tracer_names_file)
 		json.dump(D, jfile, indent=4)
 
 #
