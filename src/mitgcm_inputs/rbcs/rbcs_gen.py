@@ -67,47 +67,18 @@ args = argument()
 
 
 
-def initialise_sal(
-		hFac,
-):
-	"""
-	Given the hFac mask from the static files generation,
-	returns a zero-fill 3D array to be filled with
-	salinity relaxation values for the bottom concentration
-	point sources.
-	"""
-
-	return xr.zeros_like(hFac)
-
-def initialise_conc_fluxes(
-		hFac,
-):
-	"""
-	Given the hFac mask from the static files generation,
-	returns a zero-fill 2D array to be filled with
-	concentration values for the bottom concentration
-	point sources or surface river sources.
-	"""
-
-	return xr.zeros_like(hFac[0,:,:])
-
-#
-
 def get_spatial_masks(
-		ds,
+		inputfile,
 ):
 	"""
-	Given the dataset from the static files generation,
-	returns a zero-fill 2D array to be filled with
-	concentration values for the bottom concentration
-	point sources or surface river sources.
+	
 	"""
-
-	depth = ds.Depth
-	hFac = ds.hFacC
-	xc = ds.XC
-	yc = ds.YC
-	zc = ds.Z
+	with xr.open_dataset(inputfile) as  ds:
+		depth = ds.Depth
+		hFac = ds.hFacC
+		xc = ds.XC
+		yc = ds.YC
+		zc = ds.Z
 
 	return {'xc': xc, 'yc': yc, 'zc': zc, 'depth': depth, 'hFac': hFac}
 
@@ -145,20 +116,7 @@ def open_sewage_rivers(
 	return jdata['rivers']
 #
 
-def fill_sst_mask(
-		hFac,
-):
-	"""
-	Given a 3D field (hFacC from the static data),
-	returns the mask for SST relaxation as a 3D array
-	[depth, lat, lon] filled with 1s in the topmost level
-	and 0s elsewhere
-	"""
 
-	SST_mask = xr.zeros_like(hFac)
-	SST_mask[0,:,:] = 1.
-	return SST_mask.astype('f4')
-#
 
 def get_opensea_swg_buoyant_plume(
 		relax_sal = None,
@@ -173,9 +131,11 @@ def get_opensea_swg_buoyant_plume(
 		fixed_conc = None,
 ):
 	"""
-	Given the info for the point sources and the spatial static data,
-	fills the relaxation salinity array, creates the salinity mask and
-	fills the concentration array.
+
+	Returns:
+	 relax_sal: xr DataArray [depth,lat,lon] with salinity to relax to
+	 S_mask   : xr DataArray [depth,lat,lon] of 0.0 1.0 (float)
+	 conc_list: a list of concentration arrays, one per river source.
 	"""
 
 	n_sources = len(json_data)
@@ -204,7 +164,8 @@ def get_opensea_swg_buoyant_plume(
 			c = fixed_conc
 		relax_sal[k,j,i] = rel_S
 		conc_list[ns][j,i] = c
-	return relax_sal, xr.where(relax_sal == 0., 0., 1.).astype('f4'), conc_list
+	S_mask = xr.where(relax_sal == 0., 0., 1.).astype('f4')
+	return relax_sal, S_mask, conc_list
 
 #
 
@@ -339,12 +300,13 @@ if True: #def main():
 
 	# sewage
 	sewers_opensea = open_point_sources(args.sewage)
+	coords = get_spatial_masks(inputfile)
+	DataArray3D = coords['hFac']
+	relax_salt = xr.zeros_like(DataArray3D)
+	tracer_conc = xr.zeros_like(DataArray3D[0,:,:])
 
-	relax_salt = initialise_sal(xr.open_dataset(inputfile).hFacC)
-	tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
-	coords = get_spatial_masks(xr.open_dataset(inputfile))
-
-	SST_mask = fill_sst_mask(xr.open_dataset(inputfile).hFacC)
+	SST_mask = xr.zeros_like(DataArray3D)
+	SST_mask[0,:,:] = 1.
 	relax_salt, mask_salt, opensea_sew_conc_list = get_opensea_swg_buoyant_plume(
 		relax_sal=relax_salt,
 		conc=tracer_conc,
@@ -361,7 +323,7 @@ if True: #def main():
 	all_rivers = open_river_sources(rivers_path)
 	sewage_rivers = open_sewage_rivers(args.river)
 
-	tracer_conc = initialise_conc_fluxes(xr.open_dataset(inputfile).hFacC)
+	tracer_conc = xr.zeros_like(DataArray3D[0,:,:])
 	
 	swg_river_conc_list=get_river_swg_plume(
 		conc = tracer_conc,
