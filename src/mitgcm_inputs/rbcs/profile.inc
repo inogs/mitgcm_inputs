@@ -77,5 +77,3 @@ function my_exit {
   fi
   exit $_ec
 }
-
-

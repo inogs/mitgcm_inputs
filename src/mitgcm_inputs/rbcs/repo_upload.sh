@@ -2,7 +2,7 @@
 
 
 . ./profile.inc
-domains="ION LIG NAD SAD SAR SIC TYR GOT GSN" 
+domains="ION LIG NAD SAD SAR SIC TYR GOT GSN"
 PUBDIR=/leonardo_work/OGS_test2528_0/pub/
 # generation of files for https://medeaf.ogs.it/internal-validation/gbolzon/MER/Domain_static_data
 HERE=$PWD
@@ -21,4 +21,3 @@ for dom in ${domains} ; do
         my_prex_or_die "mv conc.tar.gz  relax.tar.gz $PUBDIR/gbolzon/MER/Domain_static_data/${dom}/"
         cd $HERE
 done
-
