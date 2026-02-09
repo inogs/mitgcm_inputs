@@ -19,13 +19,11 @@ copernicusmarine = "^2.3.0"
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.8.0"
 deptry = "^0.21.2"
+pandas-stubs = "^2.2.3"
+
 
 [tool.deptry]
 exclude = ["legacy_code/" ]
-
-
-#[tool.deptry.per_rule_ignores]
-#DEP002 = ["pydantic-provider", "jupyter", "matplotlib"]
 
 
 [tool.poetry.scripts]
