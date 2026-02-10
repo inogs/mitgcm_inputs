@@ -2,7 +2,8 @@
 
 
 . ./profile.inc
-domains="ION LIG NAD SAD SAR SIC TYR GOT GSN"
+domains="ION LIG NAD SAD SAR SIC TYR GOT GSN ISO CAG"
+
 PUBDIR=/leonardo_work/OGS_test2528_0/pub/
 # generation of files for https://medeaf.ogs.it/internal-validation/gbolzon/MER/Domain_static_data
 HERE=$PWD
