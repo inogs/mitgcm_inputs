@@ -356,7 +356,7 @@ if True:  # def main():
         out_dir=args.domdir,
     )
 
-    sources = [s["Nome_scarico"] for s in sewers_opensea] + ecoli_rivers
+    sources = [s["Nome_impianto"] for s in sewers_opensea] + ecoli_rivers
 
     # text to insert in GSN_domain.json file,
     # just after

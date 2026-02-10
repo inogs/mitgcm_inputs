@@ -142,7 +142,7 @@ selected_columns = filtered_df[
         "Long",
         "Carico_Ingresso_AE",
         "Nome_scarico",
-        "Regione",
+        "Nome_impianto",
     ]
 ]
 LOGGER.info("Columns selected")
@@ -156,7 +156,7 @@ dilut_fac = 1.0
 for iscol in range(n_scol):
     lat_scol = selected_columns.Lat.to_numpy()[iscol]
     lon_scol = selected_columns.Long.to_numpy()[iscol]
-    name_scol = selected_columns.Nome_scarico.to_numpy()[iscol]
+    name_scol = selected_columns.Nome_impianto.to_numpy()[iscol]
     if M.is_inside_domain(lon=lon_scol, lat=lat_scol):
         LOGGER.info(
             f"Processing point {iscol}: lon={lon_scol}, lat={lat_scol}"
