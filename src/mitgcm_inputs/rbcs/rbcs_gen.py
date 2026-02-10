@@ -27,15 +27,17 @@ def argument():
     A check file in netcdf format:
     - check_fluxes.nc
 
-    A json file mapping tracers indexes to point sources:
-    - RBCS_tracer_names.json
-    {
-    "TRAC52": "Scarico_Trieste_Servola",
-    "TRAC53": "Scarico_Grado",
-    "TRAC54": "Scarico_Depuratore_Di_Staran",
-    "TRAC55": "Timavo",
-    "TRAC56": "Isonzo"
-    }
+    A text file RBCS_names.txt to append on mer config GSN_domain.json:
+    ----------------------------------------
+    ,
+    "tracers": [
+        {"id": 1, "name": "Scarico_Trieste_Servola"},
+        {"id": 2, "name": "Scarico_Grado"},
+        {"id": 3, "name": "Scarico_Depuratore_Di_Staran"},
+        {"id": 4, "name": "Timavo"},
+        {"id": 5, "name": "Isonzo"}
+   ]
+   ----------------------------------------
 
     Args:
         --sewage/-s : Json file output of scarichi_json_gen.py
@@ -186,40 +188,34 @@ def get_opensea_swg_buoyant_plume(
 
 def get_river_swg_plume(
     *,
-    conc=None,
-    x=None,
-    y=None,
-    z=None,
-    depth=None,
-    all_rivers=None,
-    sewage_rivers=None,
+    conc: np,
+    rivers_positions: list[dict],
+    sewage_rivers: list[dict],
     uniform_concentration=1000.0,
-    fixed_conc=None,
-):
+    fixed_conc: float = None,
+) -> tuple[list, list]:
     """
-    Given the info for the point sources and the spatial static data,
-    fills the relaxation salinity array, creates the salinity mask and
-    fills the concentration array.
+    Args:
+        conc: xr DataArray [lat,lon] with zero values
+        rivers_positions: list of dict with river positions in the domain
+        sewage_rivers: list of dict of Italy rivers with E.coli information
+        uniform_concentration: float, concentration to assign to each river
+        fixed_conc: if float, use this concentration for all rivers,
     Returns:
      conc_list: a list of concentration arrays, one per river source.
+     ecoli_list: a list of river names corresponding to the conc_list
     """
 
-    # n_sources = len(json_data)
-    n_sources = 0
-    for dr in sewage_rivers:
-        if "concentrations" in dr.keys():
-            n_sources += 1
     conc_list = []
-    for ns in range(n_sources):
-        conc_list.append(conc * 0)
+    ecoli_list = []
 
-    riv_cntr = 0
-    for ns, jd in enumerate(all_rivers):  # [direc]
-        i = np.array(jd["longitude_indices"])  # i = jd['longitude']
+    for jd in rivers_positions:
+        i = np.array(jd["longitude_indices"])
+        j = np.array(jd["latitude_indices"])
         if isinstance(i, str):
             rr = range(int(i[2:4]), int(i[-4:-1]))
             i = np.array([ii for ii in rr])
-        j = np.array(jd["latitude_indices"])  # j = jd['latitude']
+
         # shift indices of one cell downstream according to side
         # of the river to avoid overwriting of
         # open boundary conditions (which are all zeros
@@ -232,21 +228,20 @@ def get_river_swg_plume(
             j += 1
         elif jd["side"] == "N":
             j -= 1
-            # k = np.argmin(np.abs(z.values - depth[j, i].values))
-            # block was under try
-            cntr = 0
-            while sewage_rivers[cntr]["name"] != jd["name"]:
-                cntr += 1
-            if "concentrations" in sewage_rivers[cntr].keys():
-                if fixed_conc is None:
-                    c = uniform_concentration
-                elif isinstance(fixed_conc, float):
-                    c = fixed_conc
-                conc_list[riv_cntr][j, i] = c
-                riv_cntr += 1
-        # --------------
 
-    return conc_list
+            for jr in sewage_rivers:
+                if jr["name"] == jd["name"]:
+                    if "concentrations" in jr.keys():
+                        ecoli_list.append(jr["name"])
+                        river_conc = conc.copy()
+                        if fixed_conc is None:
+                            c = uniform_concentration
+                        elif isinstance(fixed_conc, float):
+                            c = fixed_conc
+                        river_conc[j, i] = c
+                        conc_list.append(river_conc)
+
+    return conc_list, ecoli_list
 
 
 #
@@ -341,20 +336,15 @@ if True:  # def main():
 
     print("len(opensea_sew_conc_list):", len(opensea_sew_conc_list))
     # rivers
-    rivers_path = args.domdir / "rivers_positions.json"
-    all_rivers = open_river_sources(rivers_path)
-    sewage_rivers = open_sewage_rivers(args.river)
 
+    domain_rivers = open_river_sources(args.domdir / "rivers_positions.json")
+    italy_rivers = open_sewage_rivers(args.river)
     tracer_conc = xr.zeros_like(DataArray3D[0, :, :])
 
-    swg_river_conc_list = get_river_swg_plume(
+    swg_river_conc_list, ecoli_rivers = get_river_swg_plume(
         conc=tracer_conc,
-        x=coords["xc"],
-        y=coords["yc"],
-        z=coords["zc"],
-        depth=coords["depth"],
-        all_rivers=all_rivers,
-        sewage_rivers=sewage_rivers,
+        rivers_positions=domain_rivers,
+        sewage_rivers=italy_rivers,
         fixed_conc=1.0,
     )
     print("len(swg_river_conc_list):", len(swg_river_conc_list))
@@ -366,25 +356,27 @@ if True:  # def main():
         out_dir=args.domdir,
     )
 
-    # build a dictionary with river concentrations for later use
-    D = {}
-    i = 51
-    for s in sewers_opensea:
-        i += 1
-        name = "TRAC" + f"{i:02}"
-        D[name] = s["Nome_scarico"]
+    sources = [s["Nome_impianto"] for s in sewers_opensea] + ecoli_rivers
 
-    for r in all_rivers:
-        i += 1
-        name = "TRAC" + f"{i:02}"
-        D[name] = r["name"]
+    # text to insert in GSN_domain.json file,
+    # just after
+    #     "model_parameters": {
+    #     "OBCSsponge_N": ".FALSE.",
+    #     "OBCSsponge_S": ".TRUE.",
+    #     "OBCSsponge_E": ".FALSE.",
+    #     "OBCSsponge_W": ".TRUE.",
 
-    RBCS_tracer_names_file = args.domdir / "RBCS_tracer_names.json"
-    with open(RBCS_tracer_names_file, "w") as jfile:
-        print(RBCS_tracer_names_file)
-        json.dump(D, jfile, indent=4)
-
-#
-#
-# if __name__ == '__main__':
-# main()
+    #     "useOBCSbalance": ".TRUE.",
+    #     "OBCS_balanceFacN": "0.",
+    #     "OBCS_balanceFacS": "1.",
+    #     "OBCS_balanceFacE": "0.",
+    #     "OBCS_balanceFacW": "1."
+    # }
+    point_source_output = args.domdir / "RBCS_names.txt"
+    with open(point_source_output, "w", encoding="utf-8") as f:
+        f.write(',\n    "tracers": [\n')
+        for i, s in enumerate(sources):
+            comma = "," if i < len(sources) - 1 else ""
+            point_source_dict = {"id": i + 1, "name": s}
+            f.write("        " + json.dumps(point_source_dict) + comma + "\n")
+        f.write("   ]")
