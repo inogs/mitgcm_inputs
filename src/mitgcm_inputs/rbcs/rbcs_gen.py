@@ -188,12 +188,12 @@ def get_opensea_swg_buoyant_plume(
 
 def get_river_swg_plume(
     *,
-    conc:np,
-    rivers_positions:list[dict],
-    sewage_rivers:list[dict],
+    conc: np,
+    rivers_positions: list[dict],
+    sewage_rivers: list[dict],
     uniform_concentration=1000.0,
-    fixed_conc:float=None,
-)-> tuple[list,list]:
+    fixed_conc: float = None,
+) -> tuple[list, list]:
     """
     Args:
         conc: xr DataArray [lat,lon] with zero values
@@ -240,7 +240,6 @@ def get_river_swg_plume(
                             c = fixed_conc
                         river_conc[j, i] = c
                         conc_list.append(river_conc)
-
 
     return conc_list, ecoli_list
 
@@ -337,7 +336,7 @@ if True:  # def main():
 
     print("len(opensea_sew_conc_list):", len(opensea_sew_conc_list))
     # rivers
-    
+
     domain_rivers = open_river_sources(args.domdir / "rivers_positions.json")
     italy_rivers = open_sewage_rivers(args.river)
     tracer_conc = xr.zeros_like(DataArray3D[0, :, :])
@@ -357,10 +356,10 @@ if True:  # def main():
         out_dir=args.domdir,
     )
 
-    sources=[s["Nome_scarico"] for s in sewers_opensea] + ecoli_rivers
+    sources = [s["Nome_scarico"] for s in sewers_opensea] + ecoli_rivers
 
     # text to insert in GSN_domain.json file,
-    # just after 
+    # just after
     #     "model_parameters": {
     #     "OBCSsponge_N": ".FALSE.",
     #     "OBCSsponge_S": ".TRUE.",
@@ -373,12 +372,11 @@ if True:  # def main():
     #     "OBCS_balanceFacE": "0.",
     #     "OBCS_balanceFacW": "1."
     # }
-    point_source_output =  args.domdir / "RBCS_names.txt"
+    point_source_output = args.domdir / "RBCS_names.txt"
     with open(point_source_output, "w", encoding="utf-8") as f:
         f.write(',\n    "tracers": [\n')
         for i, s in enumerate(sources):
             comma = "," if i < len(sources) - 1 else ""
-            point_source_dict = {"id": i+1, "name": s}
+            point_source_dict = {"id": i + 1, "name": s}
             f.write("        " + json.dumps(point_source_dict) + comma + "\n")
         f.write("   ]")
-    
