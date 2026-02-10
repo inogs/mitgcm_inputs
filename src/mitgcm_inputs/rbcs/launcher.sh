@@ -6,7 +6,7 @@
 . ./profile.inc
 
 domains="ION LIG NAD SAD SAR SIC TYR GOT GSN ISO CAG"
-domains="ION"
+
 URL=https://medeaf.ogs.it/internal-validation/gbolzon/MER/Domain_static_data
 URL=/leonardo_work/OGS_test2528_0/MER/bathytools/
 URL=/leonardo_work/OGS_test2528_0/pub/gbolzon/MER/Domain_static_data/
