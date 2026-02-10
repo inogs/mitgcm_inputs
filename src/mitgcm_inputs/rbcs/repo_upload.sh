@@ -11,7 +11,6 @@ for dom in ${domains} ; do
         echo ${dom}
         mkdir -p conc relax
         my_prex_or_die "mv conc*bin conc/"
-	my_prex_or_die "mv RBCS_tracer_names.json conc/"
 
         my_prex_or_die "mv bottom*bin relax/"
         my_prex_or_die "tar -cf conc.tar conc/"
