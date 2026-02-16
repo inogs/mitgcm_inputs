@@ -18,6 +18,15 @@ for dom in ${domains} ; do
         my_prex_or_die "tar -cf relax.tar relax/"
         my_prex_or_die "gzip -c conc.tar > conc.tar.gz && rm -f conc.tar"
         my_prex_or_die "gzip -c relax.tar > relax.tar.gz && rm -f relax.tar"
-        my_prex_or_die "mv conc.tar.gz  relax.tar.gz $PUBDIR/gbolzon/MER/Domain_static_data/${dom}/"
+
+        PUBDIR=/leonardo_work/OGS_test2528_0/pub/gbolzon/MER/Domain_static_data/
+        # generation of files for https://medeaf.ogs.it/internal-validation/gbolzon/MER/Domain_static_data
+        my_prex_or_die "mv conc.tar.gz  relax.tar.gz $PUBDIR/${dom}/"
+        my_prex_or_die "mv conc.tar.gz  relax.tar.gz $PUBDIR/${dom}/"
+
+        PUBDIR=/leonardo_work/PNRR_MER/staging/cache/static-public/
+        # generation of files for https://mer.exact-lab.it/static-data/
+        my_prex_or_die "mv conc.tar.gz  relax.tar.gz $PUBDIR/${dom}/"
+        my_prex_or_die "mv conc.tar.gz  relax.tar.gz $PUBDIR/${dom}/"
         cd $HERE
 done
