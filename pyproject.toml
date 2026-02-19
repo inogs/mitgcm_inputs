@@ -11,9 +11,11 @@ python = "^3.11"
 numpy = "^2.1.3"
 scipy = "^1.15.2"
 bitsea = { git = "https://github.com/inogs/bit.sea.git", branch = "master" }
-xarray = "^2025.1.2"
-pandas = "^2.3.0"
+xarray = "^2026.1.0"
+pandas = { version = "^2.3.0", extras = ["openpyxl"]}
+openpyxl= "^3.1.5"
 copernicusmarine = "^2.3.0"
+matplotlib = "^3.10.8"
 
 
 [tool.poetry.group.dev.dependencies]
