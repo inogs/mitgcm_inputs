@@ -59,7 +59,9 @@ def argument(sys_argv=None):
     bflux_sub_arguments(subparsers)
 
     subparser = subparsers.add_parser(
-        "ALL", help="Execute all the available commands"
+        "FLUXES",
+        help=f"Execute {BFLUX_COMMAND_NAME}, {KEXT_COMMAND_NAME} and "
+        f"{SD_COMMAND_NAME} and save the output in a single tar.gz file",
     )
     subparser.add_argument(
         "-m",
@@ -154,6 +156,7 @@ def execute_all_commands(args: argparse.Namespace):
             data_dir.gid = reference_file.gid
             data_dir.uname = reference_file.uname
             data_dir.gname = reference_file.gname
+            data_dir.mode = 0o755
 
             tar.addfile(data_dir)
 
@@ -165,7 +168,7 @@ CMD_MAP = {
     BFLUX_COMMAND_NAME: bflux_main,
     SD_COMMAND_NAME: sd_main,
     KEXT_COMMAND_NAME: kext_main,
-    "ALL": execute_all_commands,
+    "FLUXES": execute_all_commands,
 }
 
 
