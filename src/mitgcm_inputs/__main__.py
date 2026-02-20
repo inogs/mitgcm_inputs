@@ -120,7 +120,7 @@ def execute_all_commands(args: argparse.Namespace):
         }
 
         for command_name, command in CMD_MAP.items():
-            if command_name.lower() == "all":
+            if command_name.lower() == "fluxes":
                 continue
             current_args = command_args[command_name]
             LOGGER.info("Executing %s", command_name)
