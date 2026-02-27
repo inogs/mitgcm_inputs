@@ -16,6 +16,8 @@ pandas = { version = "^2.3.0", extras = ["openpyxl"]}
 openpyxl= "^3.1.5"
 copernicusmarine = "^2.3.0"
 matplotlib = "^3.10.8"
+ogs-riverger = {git = "git@github.com:inogs/ogs_riverger.git"}
+dask = "^2026.1.2"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -27,6 +29,11 @@ pandas-stubs = "^2.2.3"
 [tool.deptry]
 exclude = ["legacy_code/" ]
 
+[tool.deptry.per_rule_ignores]
+DEP002 = [
+    "matplotlib",
+    "openpyxl",
+]
 
 [tool.poetry.scripts]
 mitgcm_inputs = "mitgcm_inputs.__main__:main"

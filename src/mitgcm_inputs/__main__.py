@@ -5,6 +5,7 @@ from os import fspath
 from pathlib import Path
 from sys import exit as sys_exit
 from tempfile import TemporaryDirectory
+from time import localtime
 from time import time
 
 from bitsea.utilities.argparse_types import existing_file_path
@@ -16,6 +17,9 @@ from mitgcm_inputs.bottom_fluxes import sub_arguments as bflux_sub_arguments
 from mitgcm_inputs.k_extinction import COMMAND_NAME as KEXT_COMMAND_NAME
 from mitgcm_inputs.k_extinction import main as kext_main
 from mitgcm_inputs.k_extinction import sub_arguments as kext_sub_arguments
+from mitgcm_inputs.rbcs import COMMAND_NAME as RBCS_COMMAND_NAME
+from mitgcm_inputs.rbcs import main as rbcs_main
+from mitgcm_inputs.rbcs import sub_arguments as rbcs_sub_arguments
 from mitgcm_inputs.surface_deposition import COMMAND_NAME as SD_COMMAND_NAME
 from mitgcm_inputs.surface_deposition import main as sd_main
 from mitgcm_inputs.surface_deposition import sub_arguments as sd_sub_arguments
@@ -31,8 +35,19 @@ def configure_logger():
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
+    # Ensure that this formatter uses local time and not UTC
+    formatter.converter = localtime
 
-    LOGGER.setLevel(logging.DEBUG)
+    LOGGER.setLevel(logging.INFO)
+
+    # Remove all handlers associated with the copernicusmarine logger
+    copernicusmarine_logger = logging.getLogger("copernicusmarine")
+    while copernicusmarine_logger.hasHandlers():
+        copernicusmarine_logger.handlers.pop()
+
+    # Avoid too much noise from botocore and urllib3 when in DEBUG mode
+    logging.getLogger("botocore").setLevel(logging.INFO)
+    logging.getLogger("urllib3").setLevel(logging.ERROR)
 
     handler = logging.StreamHandler()
     handler.setLevel(logging.DEBUG)
@@ -57,6 +72,7 @@ def argument(sys_argv=None):
     kext_sub_arguments(subparsers)
     sd_sub_arguments(subparsers)
     bflux_sub_arguments(subparsers)
+    rbcs_sub_arguments(subparsers)
 
     subparser = subparsers.add_parser(
         "FLUXES",
@@ -119,10 +135,8 @@ def execute_all_commands(args: argparse.Namespace):
             ],
         }
 
-        for command_name, command in CMD_MAP.items():
-            if command_name.lower() == "fluxes":
-                continue
-            current_args = command_args[command_name]
+        for command_name, current_args in command_args.items():
+            command = CMD_MAP[command_name]
             LOGGER.info("Executing %s", command_name)
             LOGGER.debug(
                 "Executing %s with the following args: %s",
@@ -168,6 +182,7 @@ CMD_MAP = {
     BFLUX_COMMAND_NAME: bflux_main,
     SD_COMMAND_NAME: sd_main,
     KEXT_COMMAND_NAME: kext_main,
+    RBCS_COMMAND_NAME: rbcs_main,
     "FLUXES": execute_all_commands,
 }
 

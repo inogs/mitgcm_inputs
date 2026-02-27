@@ -1,11 +1,26 @@
 import argparse
 import json
+import logging
+from collections import OrderedDict
+from collections.abc import Iterable
+from collections.abc import Sequence
+from itertools import product as cart_prod
 from pathlib import Path
+from typing import Literal
 
+import dask.array as da
 import numpy as np
 import xarray as xr
+from bitsea.commons.mask import Mask
 from bitsea.utilities.argparse_types import existing_dir_path
 from bitsea.utilities.argparse_types import existing_file_path
+from numpy.typing import DTypeLike
+from ogs_riverger.read_config import RiverConfig
+
+from mitgcm_inputs.tools.read_mesh_mask import read_mesh_mask
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def argument():
@@ -47,7 +62,6 @@ def argument():
                         - Rivers_positions.json is expected
                         - output files are dumped
 
-
     """
     )
     parser.add_argument(
@@ -73,21 +87,111 @@ def argument():
     return parser.parse_args()
 
 
-args = argument()
+def get_spatial_description_from_mit_static(input_file: Path) -> xr.Dataset:
+    """
+    Read domain information from MITgcm_static.nc
+
+    A "spatial description" is a dataset containing the following variables:
+    - depth: 1D variable with the depth of the cells
+    - latitude: 1D variable with the latitude of the cells
+    - longitude: 1D variable with the longitude of the cells
+    - tmask: 3D variable of booleans: True for water, False for land
+    - bathymetry: 2D variable (latitude, longitude) with the bathymetry
+        of the center of the cells (in meters, downwards positive, it uses
+        1e20 as a fill value on the land cells)
+
+    This function constructs the spatial description starting from the
+    MITgcm_static.nc file.
+
+    Args:
+        input_file: The path of the MITgcm_static.nc file.
+
+    Returns:
+        A spatial description of our domain
+    """
+    with xr.open_dataset(input_file) as ds:
+        spatial_description = xr.Dataset(
+            data_vars={
+                "bathymetry": (("latitude", "longitude"), ds.Depth.values),
+            },
+            coords={
+                "latitude": ds.YC.values,
+                "longitude": ds.XC.values,
+                "depth": ds.Z.values,
+            },
+        )
+
+    # Now we compute the tmask (True for water, False for land). First, we
+    # find the index of the cell that is closest to the current bathymetry
+    bathy_diff = np.abs(
+        spatial_description.bathymetry - spatial_description.depth
+    )
+    # noinspection PyArgumentList
+    bottom_index = bathy_diff.argmin(dim="depth")
+
+    # We keep only the indices that are smaller than bottom_index. First, we
+    # create a dummy array that simply stores the level number
+    level_number = xr.DataArray(
+        np.arange(spatial_description.sizes["depth"]),
+        dims=("depth",),
+    )
+
+    # We also explicitly define the order of the dimensions, otherwise depth
+    # will be the last one
+    # noinspection PyTypeChecker
+    tmask = (level_number <= bottom_index).transpose(
+        "depth", "latitude", "longitude"
+    )
+
+    # bottom_index is always >= 0. This means that, at the moment, the first
+    # level is made only of water cells. We fix this with the following line
+    tmask.values[:, spatial_description.bathymetry.values == 0.0] = False
+
+    spatial_description["tmask"] = tmask
+
+    # We fix 1e20 as the fill value for the cells that are on the land
+    spatial_description["bathymetry"] = xr.where(
+        spatial_description.tmask.isel(depth=0),
+        spatial_description.bathymetry,
+        1e20,
+    )
+
+    return spatial_description
 
 
-def get_spatial_masks(
-    inputfile,
-):
-    """ """
-    with xr.open_dataset(inputfile) as ds:
-        depth = ds.Depth
-        hFac = ds.hFacC
-        xc = ds.XC
-        yc = ds.YC
-        zc = ds.Z
+def get_spatial_description_from_meshmask(input_file: Path):
+    """
+    Read domain information from meshmask.nc
 
-    return {"xc": xc, "yc": yc, "zc": zc, "depth": depth, "hFac": hFac}
+    A "spatial description" is a dataset containing the following variables:
+    - depth: 1D variable with the depth of the cells
+    - latitude: 1D variable with the latitude of the cells
+    - longitude: 1D variable with the longitude of the cells
+    - tmask: 3D variable of booleans: True for water, False for land
+    - bathymetry: 2D variable (latitude, longitude) with the bathymetry
+        of the center of the cells (in meters, downwards positive, it uses
+        1e20 as a fill value on the land cells)
+
+    This function constructs the spatial description starting from the
+    meshmask.nc file.
+
+    Args:
+        input_file: The path of the meshmask.nc file.
+
+    Returns:
+        A spatial description of our domain
+    """
+    mask = read_mesh_mask(input_file)
+
+    spatial_description = mask.to_xarray()
+
+    bathy = xr.DataArray(
+        mask.bathymetry(),
+        dims=("latitude", "longitude"),
+    )
+    spatial_description["bathymetry"] = bathy
+
+    return spatial_description
 
 
 def open_point_sources(
@@ -103,157 +207,189 @@ def open_point_sources(
     return jdata["discharge_points"]
 
 
-def open_river_sources(
-    json_file,
-):
+def _allocate_dataarray(
+    spatial_description: xr.Dataset,
+    dtype: DTypeLike = np.float32,
+    dim: Literal[2, 3] = 3,
+) -> xr.DataArray:
     """
-    Given the json of a specific domain's river sources,
-    reads the data within.
+    Allocate a 2D or 3D DataArray that is compatible with the current domain.
+
+    This function reads the depth, latitude, and longitude information from the
+    spatial_description and allocates a DataArray with the appropriate
+    dimensions and dtype.
+
+    Args:
+        spatial_description: xr.Dataset containing depth, latitude, and
+            longitude information. Usually produced by
+            `get_spatial_description_from_mit_static` or
+            `get_spatial_description_from_meshmask`.
+        dtype: The data type of the DataArray.
+        dim: 2 if the array is 2D (and its dimensions will be latitude and
+            longitude), 3 if the array is 3D (and in this case it will also
+            include the depth dimension).
+
+    Returns: A DataArray with the appropriate dimensions and dtype filled with
+        zeros.
+
     """
+    if dim < 2 or dim > 3:
+        raise ValueError("Only 2D and 3D data are supported.")
 
-    with open(json_file) as jfile:
-        jdata = json.load(jfile)
-    return jdata
+    var_3d_sizes = (
+        spatial_description.sizes["depth"],
+        spatial_description.sizes["latitude"],
+        spatial_description.sizes["longitude"],
+    )
+    var_3d_dims = ("depth", "latitude", "longitude")
 
+    if dim == 2:
+        var_sizes = var_3d_sizes[1:]
+        var_dims = var_3d_dims[1:]
+    else:
+        var_sizes = var_3d_sizes
+        var_dims = var_3d_dims
 
-#
+    coords = {
+        "latitude": spatial_description.latitude,
+        "longitude": spatial_description.longitude,
+    }
 
+    if dim == 3:
+        coords["depth"] = spatial_description.depth
 
-def open_sewage_rivers(
-    json_file,
-):
-    print("reading", json_file)
-    with open(json_file) as jfile:
-        jdata = json.load(jfile)
-    return jdata["rivers"]
-
-
-#
+    return xr.DataArray(
+        np.zeros(var_sizes, dtype=dtype), dims=var_dims, coords=coords
+    )
 
 
 def get_opensea_swg_buoyant_plume(
-    relax_sal=None,
-    conc=None,
-    x=None,
-    y=None,
-    z=None,
-    depth=None,
-    json_data=None,
-    water_freshener=0.5,
-    only_one=False,
-    fixed_conc=None,
-):
+    spatial_description: xr.Dataset,
+    sewage_points: Iterable[dict],
+    fixed_conc: float | None,
+    water_freshener: float = 0.5,
+) -> xr.Dataset:
     """
+
+    Args:
+        spatial_description: The spatial dataset providing depth, latitude,
+            and longitude information necessary for constructing the salinity
+            relaxation fields.
+        sewage_points: Collection of sewage data points where each point is a
+            dictionary containing information about longitude, latitude,
+            sewage parameters, and other relevant data.
+        fixed_conc: If this entry is a float, all the sewage concentrations are
+            fixed to this value. Otherwise, if it is `None`, the concentrations
+            are computed from the data inside the sewage_points dict.
+        water_freshener (float, optional): A scalar used to reduce the salinity
+            relaxation value by a constant amount to model the effect of fresh
+            water introduction. Defaults to 0.5.
 
     Returns:
-     relax_sal: xr DataArray [depth,lat,lon] with salinity to relax to
-     S_mask   : xr DataArray [depth,lat,lon] of 0.0 1.0 (float)
-     conc_list: a list of concentration arrays, one per river source.
+        A dataset containing data variables for relaxed salinity, salinity
+        mask, sewage concentration indices, and concentration values.
     """
+    relax_salt = _allocate_dataarray(spatial_description, dtype=np.float32)
+    salinity_mask = xr.zeros_like(relax_salt, dtype=np.float32)
+    salinity_mask.values[:] = 1.0
 
-    n_sources = len(json_data)
-    conc_list = []
-    for ns in range(n_sources):
-        conc_list.append(conc * 0)
+    sst_mask = xr.zeros_like(relax_salt, dtype=np.float32)
+    sst_mask[{"depth": 0}] = 1.0
 
-    Lon, Lat = np.meshgrid(x, y)
-    Lon *= np.where(depth == 0.0, np.nan, 1)
-    Lat *= np.where(depth == 0.0, np.nan, 1)
+    conc_indices = xr.zeros_like(relax_salt.isel(depth=0), dtype=int)
+    conc_values = xr.zeros_like(relax_salt.isel(depth=0), dtype=np.float32)
 
-    for ns, jd in enumerate(json_data):
+    mask = Mask.from_xarray(spatial_description)
+    bottom_level_index = mask.bathymetry_in_cells() - 1
+
+    for ns, jd in enumerate(sewage_points, start=1):
         lon = jd["Long"]
         lat = jd["Lat"]
-        # i = np.argmin(np.abs(x.values - lon))
-        # j = np.argmin(np.abs(y.values - lat))
 
-        idx = np.nanargmin((Lon - lon) ** 2 + (Lat - lat) ** 2)
-        j, i = idx // len(x.values), idx % len(x.values)
-        k = np.argmin(
-            np.abs(z.values - depth[j, i].values)
-        )  # can we stop changing sign to the bathymetry?
-        rel_S = jd["CMS_avgS"] - water_freshener
+        i, j = mask.convert_lat_lon_to_indices(lon=lon, lat=lat)
+        k = bottom_level_index[i, j]
 
-        if fixed_conc == "None":
+        if k == -1:
+            raise ValueError(
+                f"The following conc is on the land: {jd['Nome_impianto']}"
+            )
+
+        relaxed_salinity_value = jd["CMS_avgS"] - water_freshener
+
+        if fixed_conc is None:
             c = jd["Carico_Ingresso_AE"] * jd["Dilution_factor"]
         elif isinstance(fixed_conc, float):
             c = fixed_conc
-        relax_sal[k, j, i] = rel_S
-        conc_list[ns][j, i] = c
-    S_mask = xr.where(relax_sal == 0.0, 0.0, 1.0).astype("f4")
-    return relax_sal, S_mask, conc_list
+        else:
+            raise ValueError(
+                f"fixed_conc must be 'None' or a float, got {fixed_conc}"
+            )
 
+        relax_salt[k, i, j] = relaxed_salinity_value
+        salinity_mask[k, i, j] = 0.0
+        conc_indices[i, j] = ns
+        conc_values[i, j] = c
 
-#
+    return xr.Dataset(
+        data_vars={
+            "relaxed_salinity": relax_salt,
+            "salinity_mask": salinity_mask,
+            "sst_mask": sst_mask,
+            "conc_values": conc_values,
+            "conc_indices": conc_indices,
+        }
+    )
 
 
 def get_river_swg_plume(
     *,
-    conc: np,
-    rivers_positions: list[dict],
-    sewage_rivers: list[dict],
+    spatial_description: xr.Dataset,
+    rivers: Iterable[dict],
     uniform_concentration=1000.0,
-    fixed_conc: float = None,
-) -> tuple[list, list]:
-    """
-    Args:
-        conc: xr DataArray [lat,lon] with zero values
-        rivers_positions: list of dict with river positions in the domain
-        sewage_rivers: list of dict of Italy rivers with E.coli information
-        uniform_concentration: float, concentration to assign to each river
-        fixed_conc: if float, use this concentration for all rivers,
-    Returns:
-     conc_list: a list of concentration arrays, one per river source.
-     ecoli_list: a list of river names corresponding to the conc_list
-    """
+    fixed_conc: float | None = None,
+) -> xr.Dataset:
+    conc_indices = _allocate_dataarray(spatial_description, dtype=int, dim=2)
+    conc_values = xr.zeros_like(conc_indices, dtype=np.float32)
 
-    conc_list = []
-    ecoli_list = []
+    for r_num, river in enumerate(rivers, start=1):
+        source_cells = cart_prod(
+            river["latitude_indices"], river["longitude_indices"]
+        )
 
-    for jd in rivers_positions:
-        i = np.array(jd["longitude_indices"])
-        j = np.array(jd["latitude_indices"])
-        if isinstance(i, str):
-            rr = range(int(i[2:4]), int(i[-4:-1]))
-            i = np.array([ii for ii in rr])
+        for j, i in source_cells:
+            # shift indices of one cell downstream, according to the side of
+            # the river, to avoid overwriting of open boundary conditions
+            # (which are all zeros by construction for the E. coli
+            # concentrations)
+            if river["side"] == "E":
+                i -= 1
+            elif river["side"] == "W":
+                i += 1
+            elif river["side"] == "S":
+                j += 1
+            elif river["side"] == "N":
+                j -= 1
 
-        # shift indices of one cell downstream according to side
-        # of the river to avoid overwriting of
-        # open boundary conditions (which are all zeros
-        # by construction for the E. coli concentrations)
-        if jd["side"] == "E":
-            i -= 1
-        elif jd["side"] == "W":
-            i += 1
-        elif jd["side"] == "S":
-            j += 1
-        elif jd["side"] == "N":
-            j -= 1
+            if fixed_conc is None:
+                c = uniform_concentration
+            elif isinstance(fixed_conc, float):
+                c = fixed_conc
+            else:
+                raise ValueError(
+                    f"fixed_conc must be 'None' or a float, got {fixed_conc}"
+                )
+            conc_indices[j, i] = r_num
+            conc_values[j, i] = c
 
-            for jr in sewage_rivers:
-                if jr["name"] == jd["name"]:
-                    if "concentrations" in jr.keys():
-                        ecoli_list.append(jr["name"])
-                        river_conc = conc.copy()
-                        if fixed_conc is None:
-                            c = uniform_concentration
-                        elif isinstance(fixed_conc, float):
-                            c = fixed_conc
-                        river_conc[j, i] = c
-                        conc_list.append(river_conc)
-
-    return conc_list, ecoli_list
+    return xr.Dataset(
+        {
+            "conc_values": conc_values,
+            "conc_indices": conc_indices,
+        }
+    )
 
 
-#
-
-
-def write_binary_files(
-    relax_sal,
-    S_mask,
-    sst_mask,
-    concs,
-    out_dir: Path,
-):
+def write_binary_files(conc_and_relax: xr.Dataset, out_dir: Path):
     """
     Args:
         relax_sal : ndarray [depth,lat,lon] values to relax to
@@ -272,92 +408,31 @@ def write_binary_files(
             - check_fluxes.nc
 
     """
-
     filename = out_dir / "bottom_sources_S_relaxation.bin"
-    relax_sal.values.astype("f4").tofile(filename)
-    print(filename)
-
-    for i, conc in enumerate(concs):
-        filename = out_dir / f"conc{i + 1:02}_bottom_fluxes.bin"
-        print(filename)
-        (conc.values).astype("f4").tofile(filename)
+    conc_and_relax.relaxed_salinity.values.astype("f4").tofile(filename)
+    LOGGER.info("File %s has been written", filename)
 
     filename = out_dir / "bottom_sources_S_mask.bin"
-    S_mask.values.astype("f4").tofile(filename)
-    print(filename)
+    conc_and_relax.salinity_mask.values.astype("f4").tofile(filename)
+    LOGGER.info("File %s has been written", filename)
 
     filename = out_dir / "SST_mask.bin"
-    sst_mask.values.astype("f4").tofile(filename)
-    print(filename)
+    conc_and_relax.sst_mask.values.astype("f4").tofile(filename)
+    LOGGER.info("File %s has been written", filename)
 
-    # check
+    for data_var in conc_and_relax.data_vars:
+        if not data_var.startswith("conc"):
+            continue
+
+        filename = out_dir / f"{data_var}_bottom_fluxes.bin"
+        conc_and_relax[data_var].values.astype("f4").tofile(filename)
+        LOGGER.info("File %s has been written", filename)
+
     filename = out_dir / "check_fluxes.nc"
-    print(filename)
-    xr.merge(
-        [
-            S_mask.rename("salinity_mask"),
-            relax_sal.rename("relax_salinity"),
-            sst_mask.rename("sst_mask"),
-        ]
-        + [conc.rename(f"CONC{i + 1:02}") for i, conc in enumerate(concs)]
-    ).to_netcdf(filename)
+    conc_and_relax.to_netcdf(filename)
 
 
-#
-
-
-###
-
-
-if True:  # def main():
-    inputfile = args.domdir / ("MIT_static.nc")
-
-    # sewage
-    sewers_opensea = open_point_sources(args.sewage)
-    coords = get_spatial_masks(inputfile)
-    DataArray3D = coords["hFac"]
-    relax_salt = xr.zeros_like(DataArray3D)
-    tracer_conc = xr.zeros_like(DataArray3D[0, :, :])
-
-    SST_mask = xr.zeros_like(DataArray3D)
-    SST_mask[0, :, :] = 1.0
-    relax_salt, mask_salt, opensea_sew_conc_list = (
-        get_opensea_swg_buoyant_plume(
-            relax_sal=relax_salt,
-            conc=tracer_conc,
-            x=coords["xc"],
-            y=coords["yc"],
-            z=coords["zc"],
-            depth=coords["depth"],
-            json_data=sewers_opensea,
-            fixed_conc=1.0,
-        )
-    )
-
-    print("len(opensea_sew_conc_list):", len(opensea_sew_conc_list))
-    # rivers
-
-    domain_rivers = open_river_sources(args.domdir / "rivers_positions.json")
-    italy_rivers = open_sewage_rivers(args.river)
-    tracer_conc = xr.zeros_like(DataArray3D[0, :, :])
-
-    swg_river_conc_list, ecoli_rivers = get_river_swg_plume(
-        conc=tracer_conc,
-        rivers_positions=domain_rivers,
-        sewage_rivers=italy_rivers,
-        fixed_conc=1.0,
-    )
-    print("len(swg_river_conc_list):", len(swg_river_conc_list))
-    write_binary_files(
-        relax_salt,
-        mask_salt,
-        SST_mask,
-        opensea_sew_conc_list + swg_river_conc_list,
-        out_dir=args.domdir,
-    )
-
-    sources = [s["Nome_impianto"] for s in sewers_opensea] + ecoli_rivers
-
+def build_domain_config_string(sources: list[tuple[int, str, str]]) -> str:
     # text to insert in GSN_domain.json file,
     # just after
     #     "model_parameters": {
@@ -372,11 +447,144 @@ if True:  # def main():
     #     "OBCS_balanceFacE": "0.",
     #     "OBCS_balanceFacW": "1."
     # }
+    output = ',\n    "tracers": [\n'
+    for i, s in enumerate(sources):
+        comma = "," if i < len(sources) - 1 else ""
+        output += "        " + json.dumps(s) + comma + "\n"
+    output += "   ]"
+    return output
+
+
+def build_conc_and_relax_variables(
+    spatial_description: xr.Dataset,
+    sewage_points: Sequence[dict],
+    rivers: Sequence[dict] | None = None,
+) -> tuple[list, xr.Dataset]:
+    if rivers is None:
+        rivers = []
+
+    swg_buoyant_plume = get_opensea_swg_buoyant_plume(
+        spatial_description=spatial_description,
+        sewage_points=sewage_points,
+        fixed_conc=1.0,
+    )
+    n_concs = int(swg_buoyant_plume.conc_indices.max())
+    LOGGER.info("Produced %i concentrations from the sewage sources", n_concs)
+
+    rivers_conc = get_river_swg_plume(
+        spatial_description=spatial_description,
+        rivers=rivers,
+        fixed_conc=1.0,
+    )
+
+    rivers_conc_indices = xr.where(
+        rivers_conc.conc_indices != 0, rivers_conc.conc_indices + n_concs, 0
+    )
+    LOGGER.info(
+        "Produced %i concentrations from the rivers",
+        rivers_conc.conc_indices.max(),
+    )
+
+    # Create a list of the sources, together with their name and their kind
+    sources = []
+    for s in sewage_points:
+        sources.append(
+            OrderedDict(
+                [
+                    ("id", len(sources) + 1),
+                    ("name", s["Nome_impianto"]),
+                    ("kind", "sewage"),
+                ]
+            )
+        )
+    for r in rivers:
+        sources.append(
+            OrderedDict(
+                [
+                    ("id", len(sources) + 1),
+                    ("name", r["name"]),
+                    ("kind", "river"),
+                ]
+            )
+        )
+
+    total_conc_indices = swg_buoyant_plume.conc_indices + rivers_conc_indices
+    total_conc_values = swg_buoyant_plume.conc_values + rivers_conc.conc_values
+
+    salinity_and_concs = xr.Dataset(
+        data_vars={
+            "relaxed_salinity": swg_buoyant_plume.relaxed_salinity,
+            "salinity_mask": swg_buoyant_plume.salinity_mask,
+            "sst_mask": swg_buoyant_plume.sst_mask,
+        },
+        coords={
+            "latitude": spatial_description.latitude,
+            "longitude": spatial_description.longitude,
+            "depth": spatial_description.depth,
+        },
+    )
+
+    # We transform conc_indices and conc_values into different concs variables
+    n_concs = int(total_conc_indices.max())
+
+    for i in range(1, n_concs + 1):
+        current_conc_values = da.where(
+            total_conc_indices == i, total_conc_values, 0.0
+        )
+        current_conc = xr.DataArray(
+            current_conc_values,
+            dims=("latitude", "longitude"),
+            coords={
+                "latitude": salinity_and_concs.latitude,
+                "longitude": salinity_and_concs.longitude,
+            },
+        )
+        salinity_and_concs["conc" + f"{i:02}"] = current_conc
+
+    return sources, salinity_and_concs
+
+
+def main():
+    args = argument()
+
+    input_file = args.domdir / "MIT_static.nc"
+    rivers_positions_file = args.domdir / "rivers_positions.json"
+
+    river_positions = json.loads(
+        rivers_positions_file.read_text(encoding="utf-8")
+    )
+
+    if args.river is not None:
+        rivers_config = RiverConfig.from_json(args.river)
+    else:
+        rivers_config = RiverConfig(root=OrderedDict())
+
+    def has_tracer(river):
+        river_id = river["id"]
+        return len(rivers_config.root[river_id].concentrations) > 0
+
+    # Keep only rivers with tracers
+    rivers = tuple(r for r in river_positions if has_tracer(r))
+
+    # Read the description of the domain from MITgcm static file
+    spatial_description = get_spatial_description_from_mit_static(input_file)
+
+    # Read the JSON with the sewage sources
+    sewage_points = open_point_sources(args.sewage)
+
+    sources, conc_and_relax = build_conc_and_relax_variables(
+        spatial_description=spatial_description,
+        sewage_points=sewage_points,
+        rivers=rivers,
+    )
+
+    config_string = build_domain_config_string(sources)
+
     point_source_output = args.domdir / "RBCS_names.txt"
-    with open(point_source_output, "w", encoding="utf-8") as f:
-        f.write(',\n    "tracers": [\n')
-        for i, s in enumerate(sources):
-            comma = "," if i < len(sources) - 1 else ""
-            point_source_dict = {"id": i + 1, "name": s}
-            f.write("        " + json.dumps(point_source_dict) + comma + "\n")
-        f.write("   ]")
+    point_source_output.write_text(config_string)
+
+    write_binary_files(conc_and_relax, args.domdir)
+
+
+if __name__ == "__main__":
+    main()
