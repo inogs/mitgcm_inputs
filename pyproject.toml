@@ -16,8 +16,8 @@ pandas = { version = "^2.3.0", extras = ["openpyxl"]}
 openpyxl= "^3.1.5"
 copernicusmarine = "^2.3.0"
 matplotlib = "^3.10.8"
-ogs-riverger = {git = "git@github.com:inogs/ogs_riverger.git"}
 dask = "^2026.1.2"
+ogs-riverger = {git = "https://github.com/inogs/ogs_riverger.git"}
 
 
 [tool.poetry.group.dev.dependencies]

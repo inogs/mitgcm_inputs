@@ -1571,7 +1571,7 @@ xarray = ">=2025.2.0,<2027.0.0"
 
 [package.source]
 type = "git"
-url = "ssh://git@github.com/inogs/ogs_riverger.git"
+url = "https://github.com/inogs/ogs_riverger.git"
 reference = "HEAD"
 resolved_reference = "93c5c554ca8197cfa2c7b2bdbcef98299ba33f47"
 
@@ -2677,4 +2677,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "4b5ef645bf1a38057cb037a34a7603ac0be0b316d4d455c767224cb9caba4662"
+content-hash = "8cdb4eed2095cfce1991bd13261f38a2070b5f34d7ca1f1b37e0b33e9f88aa8e"
