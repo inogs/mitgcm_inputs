@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from collections.abc import Sequence
 from itertools import product as cart_prod
 from pathlib import Path
+from typing import Any
 from typing import Literal
 
 import dask.array as da
@@ -270,24 +271,57 @@ def get_opensea_swg_buoyant_plume(
     water_freshener: float = 0.5,
 ) -> xr.Dataset:
     """
+    Generates a Dataset of buoyant plume data for sewage discharge points.
+
+    This function creates a dataset based on spatial descriptions and a set of
+    sewage points. The output dataset has 5 variables:
+    - `relaxed_salinity`
+    - `salinity_mask`
+    - `sst_mask`
+    - `conc_values`
+    - `conc_indices`
+
+    The first two, `relaxed_salinity` and `salinity_mask`, are 3D arrays
+    that represent where and how the salinity must be relaxed. `salinity_mask`
+    is 1 everywhere except at the point where the salinity is relaxed.
+    `relaxed_salinity` contains the values of the salinity at the relaxed
+    points (and it is zero everywhere else).
+
+    The third, `sst_mask`, is a 3D array that is 0 everywhere except at the
+    surface.
+
+    Finally, `conc_values` and `conc_indices` are 2D arrays that contain the
+    information about the position and the values of the tracers (and their
+    concentration). If there are n tracers, `conc_indices` contains integer
+    values between 0 and n. The concentration values of the `i`-th tracers are
+    0 everywhere besides on the cells where `conc_indices` is equal to `i`.
+    On these cells, the concentration values are the values of `conc_values`.
+    In this way, we can store all the information about the concentration of
+    many tracers using just two variables.
 
     Args:
-        spatial_description: The spatial dataset providing depth, latitude,
-            and longitude information necessary for constructing the salinity
-            relaxation fields.
-        sewage_points: Collection of sewage data points where each point is a
-            dictionary containing information about longitude, latitude,
-            sewage parameters, and other relevant data.
-        fixed_conc: If this entry is a float, all the sewage concentrations are
-            fixed to this value. Otherwise, if it is `None`, the concentrations
-            are computed from the data inside the sewage_points dict.
-        water_freshener (float, optional): A scalar used to reduce the salinity
-            relaxation value by a constant amount to model the effect of fresh
-            water introduction. Defaults to 0.5.
+        spatial_description (xr.Dataset): The spatial data describing the
+            area of interest, which includes grid coordinates and bathymetry
+            information. Look at the documentation of the functions
+            `get_spatial_description_from_mit_static` or
+            `get_spatial_description_from_meshmask` to have an accurate
+            description of a spatial description.
+        sewage_points: An iterable of dictionaries, where each dictionary
+            describes properties of individual sewage discharge points,
+            including geographical coordinates and sewage properties.
+        fixed_conc: An optional fixed value for sewage point concentration.
+            If not provided, concentrations are computed dynamically based on
+            input properties.
+        water_freshener (float): The adjustment value for fresh water in
+            salinity calculations, defaulting to 0.5.
 
     Returns:
-        A dataset containing data variables for relaxed salinity, salinity
-        mask, sewage concentration indices, and concentration values.
+        A dataset containing the computed buoyant plume data for the sewage
+        discharge points.
+
+    Raises:
+        ValueError: If any sewage discharge point is on land or if the
+        `fixed_conc` value is invalid.
     """
     relax_salt = _allocate_dataarray(spatial_description, dtype=np.float32)
     salinity_mask = xr.zeros_like(relax_salt, dtype=np.float32)
@@ -348,6 +382,42 @@ def get_river_swg_plume(
     uniform_concentration=1000.0,
     fixed_conc: float | None = None,
 ) -> xr.Dataset:
+    """
+    Generate a dataset with the position of the pollutant from the rivers.
+
+    This function does for the rivers mouths what
+    `get_opensea_swg_buoyant_plume` does for the sewage points. It iterates
+    over the rivers and generates a dataset containing the position of the
+    E.coli concentration sources and their concentration values.
+    The output dataset has two variables:
+      - "conc_values"
+      - "conc_indices"
+
+    These two variables have the same meaning that they have for the
+    `get_opensea_swg_buoyant_plume` function.
+
+    Args:
+        spatial_description: A dataset describing the spatial grid in
+            which the river plume will be projected.
+        rivers: A collection of dictionaries where each dictionary
+            describes an individual river discharge source. Each dictionary
+            must include at least the keys "latitude_indices",
+            "longitude_indices", and "side", detailing the source cell indices
+            and river outflow orientation.
+        uniform_concentration: Default concentration value to be used for all
+            river discharge sources when `fixed_conc` is None. Defaults to
+            1000.0.
+        fixed_conc (optional): Fixed concentration value to override
+            `uniform_concentration` for all river discharge sources. Must be a
+            float or None. Defaults to None.
+
+    Returns:
+        A dataset containing two data arrays:
+            - "conc_values": A 2D data array containing the pollutant
+              concentration values across the spatial grid.
+            - "conc_indices": A 2D data array containing numerical indices
+              marking the source regions of pollutant discharge.
+    """
     conc_indices = _allocate_dataarray(spatial_description, dtype=int, dim=2)
     conc_values = xr.zeros_like(conc_indices, dtype=np.float32)
 
@@ -459,7 +529,54 @@ def build_conc_and_relax_variables(
     spatial_description: xr.Dataset,
     sewage_points: Sequence[dict],
     rivers: Sequence[dict] | None = None,
-) -> tuple[list, xr.Dataset]:
+) -> tuple[list[OrderedDict[str, Any]], xr.Dataset]:
+    """
+    Builds concentration and relaxation vars based on sewage and river data.
+
+    This function processes sewage points and optional river data to generate
+    concentration indices and values for both, combining them into a
+    consolidated dataset. It also produces a list of source metadata for the
+    inputs.
+
+    This function calls `get_opensea_swg_buoyant_plume` and
+    `get_river_swg_plume` and then merges the results into a single dataset.
+
+    Args:
+        spatial_description: Dataset containing spatial details, including
+            latitude, longitude, and depth.
+        sewage_points: List of dictionaries representing sewage points.
+            Each dictionary should include metadata about a sewage source such
+            as its name.
+        rivers: Optional list of dictionaries representing river sources. Each
+            dictionary should include metadata about a river source, such as
+            its name. Defaults to None.
+
+    Returns:
+        A tuple where the first element is a list of sources with their
+        metadata and the second element is an xarray dataset with relaxation
+        and concentration variables.
+
+        The list of sources contains a dictionary for each source. This
+        dictionary contains 4 keys:
+        - "id": A unique identifier for the source.
+        - "name": The name of the source. If the sources are sewage points,
+          this is the "Name_impianto" key from the sewage point dictionary.
+          Otherwise, it is the name of the river source.
+        - "kind": The type of the source. Can be "sewage" or "river".
+        - "frequency": The frequency of the source. This describes if and how
+          the source changes during time. At the moment, it is always "fixed".
+
+        The second element is an xarray dataset containing `3 + n` variables,
+        where `n` is the number of unique concentration indices produced.
+        There is one concentration variable for each tracer and three other
+        variables:
+        - `relaxed_salinity`
+        - `salinity_mask`
+        - `sst_mask`
+        These 3 variables are generated by the `get_opensea_swg_buoyant_plume`
+        function.
+
+    """
     if rivers is None:
         rivers = []
 
@@ -471,6 +588,7 @@ def build_conc_and_relax_variables(
     n_concs = int(swg_buoyant_plume.conc_indices.max())
     LOGGER.info("Produced %i concentrations from the sewage sources", n_concs)
 
+    # Now we read the concentrations from the rivers
     rivers_conc = get_river_swg_plume(
         spatial_description=spatial_description,
         rivers=rivers,
@@ -485,7 +603,7 @@ def build_conc_and_relax_variables(
         rivers_conc.conc_indices.max(),
     )
 
-    # Create a list of the sources, together with their name and their kind
+    # Create a list of the sources, together with their name and kind
     sources = []
     for s in sewage_points:
         sources.append(
@@ -494,6 +612,7 @@ def build_conc_and_relax_variables(
                     ("id", len(sources) + 1),
                     ("name", s["Nome_impianto"]),
                     ("kind", "sewage"),
+                    ("frequency", "fixed"),
                 ]
             )
         )
@@ -504,6 +623,7 @@ def build_conc_and_relax_variables(
                     ("id", len(sources) + 1),
                     ("name", r["name"]),
                     ("kind", "river"),
+                    ("frequency", "fixed"),
                 ]
             )
         )
@@ -511,6 +631,10 @@ def build_conc_and_relax_variables(
     total_conc_indices = swg_buoyant_plume.conc_indices + rivers_conc_indices
     total_conc_values = swg_buoyant_plume.conc_values + rivers_conc.conc_values
 
+    # Now we prepare the dataset that is the second part of the output.
+    # We introduce the three masks about the salinity and SST and then we copy
+    # the concentrations of the tracers from the conc_values and conc_indices
+    # variables.
     salinity_and_concs = xr.Dataset(
         data_vars={
             "relaxed_salinity": swg_buoyant_plume.relaxed_salinity,

@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import warnings
 from pathlib import Path
 
 import copernicusmarine as cm
@@ -10,6 +11,8 @@ import xarray as xr
 from bitsea.commons.mask import Mask
 from bitsea.utilities.argparse_types import existing_file_path
 from bitsea.utilities.argparse_types import path_inside_an_existing_dir
+
+from mitgcm_inputs.tools.read_mesh_mask import read_mesh_mask
 
 LOGGER = logging.getLogger()
 
@@ -107,10 +110,43 @@ def load_salinity_dataset(
         maximum_depth=maximum_depth,
     ).mean(dim="time")
 
+    # Ensure the dataset is already loaded in memory
     return sal.load()
 
 
-def read_sewage_positions(excel_file: Path, meshmask_file: Path):
+def read_sewage_positions(
+    excel_file: Path, meshmask_file: Path
+) -> pd.DataFrame:
+    """
+    Reads the Excel file that describes the position of the sewage discharges.
+
+    This function reads the Excel file and saves into a pandas dataframe all
+    the sewage discharges that are inside the current domain. It reports only
+    the sewage that the user has explicitly activated, i.e., the ones that have
+    a non-empty string in the column "Dominio".
+
+    Args:
+        excel_file: The path of the excel_file that must be read
+        meshmask_file: the mesh mask file that describes the current domain
+
+    Returns:
+        A pandas dataframe containing the sewage discharges; each row is a
+        different discharge.
+        The dataframe contains the following columns:
+          - "Codice_Scarico": the unique identifier of the discharge
+          - "Lat": the latitude of the discharge
+          - "Long": the longitude of the discharge
+          - "Carico_Ingresso_AE"
+          - "Nome_scarico": the name of the discharge
+          - "Nome_impianto": the name of the system that manages the discharge
+          - "CMS_depth": the depth of the discharge in the CopernicusMarine
+            products' grid
+          - "CMS_avgS": the average salinity (from 2012 to 2021) of the
+            discharge
+          - "Dilution_factor": the dilution factor of the discharge. Always 1
+            at the moment.
+
+    """
     LOGGER.info("Reading sewage positions from excel file %s", excel_file)
     df = pd.read_excel(excel_file)
 
@@ -119,7 +155,7 @@ def read_sewage_positions(excel_file: Path, meshmask_file: Path):
     LOGGER.info("Excel file read")
 
     LOGGER.debug("Reading meshmask file %s", meshmask_file)
-    domain_mask = Mask.from_mer_file(meshmask_file)
+    domain_mask = read_mesh_mask(meshmask_file)
 
     x0, x1 = domain_mask.lon.min() - 0.5, domain_mask.lon.max() + 0.5
     y0, y1 = domain_mask.lat.min() - 0.5, domain_mask.lat.max() + 0.5
@@ -212,7 +248,7 @@ def read_sewage_positions(excel_file: Path, meshmask_file: Path):
 
         # k is the number of water cells that there are on the position (j, i).
         # If k == -1, this means that there are no water cells in the radius
-        # specified by the convert_lon_lat_wetpoint_indices and therefore we
+        # specified by the convert_lon_lat_wetpoint_indices, and therefore we
         # discard the point.
         k = bathy[j, i] - 1  # bathymetry from CMS
         if k == -1:
@@ -227,9 +263,28 @@ def read_sewage_positions(excel_file: Path, meshmask_file: Path):
             lon=longitude, lat=latitude
         )
         if not domain_mask.mask[0, j_d, i_d]:
-            LOGGER.warning(
-                f"Position of {name_scol} is on land according to the mask"
-            )
+            # This point is outside the water cells of our domain. Is it
+            # because it is on a different sea or is it because its coordinate
+            # are a little bit off? Let's check if there is a water cell inside
+            # a radius of three cells around the discharge point. If there is,
+            # then we have a problem (our bathymetry is incoherent with the
+            # coordinates of this sewage). Otherwise, we can simply ignore
+            # this point.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                j_d_w, i_d_w = cms_mask.convert_lon_lat_wetpoint_indices(
+                    lon=longitude, lat=latitude, max_radius=3
+                )
+            if domain_mask.mask[0, j_d_w, i_d_w]:
+                LOGGER.debug(
+                    f"Discarding point {name_scol} because it is outside"
+                    f"our domain"
+                )
+            else:
+                LOGGER.warning(
+                    f"Position of {name_scol} is on land according to the "
+                    f"domain mask! This point will be ignored!"
+                )
             return discarded_point_value
 
         depth = sal.depth[k].values.item()
@@ -255,6 +310,9 @@ def read_sewage_positions(excel_file: Path, meshmask_file: Path):
 
 
 def main():
+    # Old function that dumps the output of `read_sewage_positions` into
+    # a json file. This works together with the `argument` function of this
+    # module
     args = argument()
 
     excel_file = args.inputfile
