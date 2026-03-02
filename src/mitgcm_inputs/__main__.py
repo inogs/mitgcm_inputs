@@ -42,8 +42,7 @@ def configure_logger():
 
     # Remove all handlers associated with the copernicusmarine logger
     copernicusmarine_logger = logging.getLogger("copernicusmarine")
-    while copernicusmarine_logger.hasHandlers():
-        copernicusmarine_logger.handlers.pop()
+    copernicusmarine_logger.handlers.clear()
 
     # Avoid too much noise from botocore and urllib3 when in DEBUG mode
     logging.getLogger("botocore").setLevel(logging.INFO)
