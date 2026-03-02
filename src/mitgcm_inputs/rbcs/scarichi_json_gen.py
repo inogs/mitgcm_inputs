@@ -272,7 +272,7 @@ def read_sewage_positions(
             # this point.
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                j_d_w, i_d_w = cms_mask.convert_lon_lat_wetpoint_indices(
+                i_d_w, j_d_w = domain_mask.convert_lon_lat_wetpoint_indices(
                     lon=longitude, lat=latitude, max_radius=3
                 )
             if domain_mask.mask[0, j_d_w, i_d_w]:

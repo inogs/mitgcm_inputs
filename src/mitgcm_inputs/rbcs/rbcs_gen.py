@@ -340,8 +340,8 @@ def get_opensea_swg_buoyant_plume(
         lon = jd["Long"]
         lat = jd["Lat"]
 
-        i, j = mask.convert_lat_lon_to_indices(lon=lon, lat=lat)
-        k = bottom_level_index[i, j]
+        j, i = mask.convert_lat_lon_to_indices(lon=lon, lat=lat)
+        k = bottom_level_index[j, i]
 
         if k == -1:
             raise ValueError(
@@ -359,10 +359,10 @@ def get_opensea_swg_buoyant_plume(
                 f"fixed_conc must be 'None' or a float, got {fixed_conc}"
             )
 
-        relax_salt[k, i, j] = relaxed_salinity_value
-        salinity_mask[k, i, j] = 0.0
-        conc_indices[i, j] = ns
-        conc_values[i, j] = c
+        relax_salt[k, j, i] = relaxed_salinity_value
+        salinity_mask[k, j, i] = 0.0
+        conc_indices[j, i] = ns
+        conc_values[j, i] = c
 
     return xr.Dataset(
         data_vars={
