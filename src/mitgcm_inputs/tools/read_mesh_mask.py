@@ -13,6 +13,7 @@ def read_mesh_mask(mask_file_path: Path):
         longitude = ds.longitude.values
         depth = ds.depth.values
         mesh_mask = ds.tmask.values == 1
+        e3t = ds.e3t.values
     grid = RegularGrid(lat=latitude, lon=longitude)
-    mask = Mask(grid, depth, mesh_mask)
+    mask = Mask(grid, depth, mesh_mask, e3t=e3t)
     return mask
