@@ -276,14 +276,14 @@ def read_sewage_positions(
                     lon=longitude, lat=latitude, max_radius=3
                 )
             if domain_mask.mask[0, j_d_w, i_d_w]:
-                LOGGER.debug(
-                    f"Discarding point {name_scol} because it is outside"
-                    f"our domain"
-                )
-            else:
                 LOGGER.warning(
                     f"Position of {name_scol} is on land according to the "
                     f"domain mask! This point will be ignored!"
+                )
+            else:
+                LOGGER.debug(
+                    f"Discarding point {name_scol} because it is outside"
+                    f"our domain"
                 )
             return discarded_point_value
 
