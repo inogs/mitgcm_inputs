@@ -283,9 +283,9 @@ def get_opensea_swg_buoyant_plume(
 
     The first two, `relaxed_salinity` and `salinity_mask`, are 3D arrays
     that represent where and how the salinity must be relaxed. `salinity_mask`
-    is 0 everywhere except at the point where the salinity is relaxed.
-    `relaxed_salinity` contains the values of the salinity at the relaxed
-    points (and it is zero everywhere else).
+    is a binary mask: it is 1 at the points where the salinity is relaxed and
+    0 everywhere else. `relaxed_salinity` contains the values of the salinity
+    at the relaxed points (and it is zero everywhere else).
 
     The third, `sst_mask`, is a 3D array that is 0 everywhere except at the
     surface.
