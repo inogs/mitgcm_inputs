@@ -187,7 +187,9 @@ def main(args: argparse.Namespace) -> int:
                 .values.astype("f4", copy=False)
                 .tobytes()
             )
-            current_conc = tarfile.TarInfo(f"conc/{data_var}.bin")
+            current_conc = tarfile.TarInfo(
+                f"conc/{data_var}_bottom_fluxes.bin"
+            )
             set_tar_file_ownerships(current_conc)
             current_conc.mode = 0o644
             current_conc.size = len(current_conc_data)
