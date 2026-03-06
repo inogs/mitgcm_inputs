@@ -17,6 +17,9 @@ from mitgcm_inputs.bottom_fluxes import sub_arguments as bflux_sub_arguments
 from mitgcm_inputs.k_extinction import COMMAND_NAME as KEXT_COMMAND_NAME
 from mitgcm_inputs.k_extinction import main as kext_main
 from mitgcm_inputs.k_extinction import sub_arguments as kext_sub_arguments
+from mitgcm_inputs.ob_indices import COMMAND_NAME as OB_INDICES_COMMAND_NAME
+from mitgcm_inputs.ob_indices import main as ob_indices_main
+from mitgcm_inputs.ob_indices import sub_arguments as ob_indices_sub_arguments
 from mitgcm_inputs.rbcs import COMMAND_NAME as RBCS_COMMAND_NAME
 from mitgcm_inputs.rbcs import main as rbcs_main
 from mitgcm_inputs.rbcs import sub_arguments as rbcs_sub_arguments
@@ -72,6 +75,7 @@ def argument(sys_argv=None):
     sd_sub_arguments(subparsers)
     bflux_sub_arguments(subparsers)
     rbcs_sub_arguments(subparsers)
+    ob_indices_sub_arguments(subparsers)
 
     subparser = subparsers.add_parser(
         "FLUXES",
@@ -182,6 +186,7 @@ CMD_MAP = {
     SD_COMMAND_NAME: sd_main,
     KEXT_COMMAND_NAME: kext_main,
     RBCS_COMMAND_NAME: rbcs_main,
+    OB_INDICES_COMMAND_NAME: ob_indices_main,
     "FLUXES": execute_all_commands,
 }
 
