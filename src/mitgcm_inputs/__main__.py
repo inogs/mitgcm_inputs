@@ -49,6 +49,7 @@ def configure_logger():
 
     # Avoid too much noise from botocore and urllib3 when in DEBUG mode
     logging.getLogger("botocore").setLevel(logging.INFO)
+    logging.getLogger("findlibs").setLevel(logging.INFO)
     logging.getLogger("urllib3").setLevel(logging.ERROR)
 
     handler = logging.StreamHandler()

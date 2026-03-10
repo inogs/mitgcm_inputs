@@ -1,10 +1,13 @@
 import argparse
+import json
 import logging
 
 import xarray as xr
 from bitsea.commons.mask import MaskWithRivers
 from bitsea.utilities.argparse_types import existing_file_path
+from bitsea.utilities.argparse_types import path_inside_an_existing_dir
 
+from mitgcm_inputs.ob_indices.ob_indices import generate_ob_indices
 from mitgcm_inputs.tools.read_mesh_mask import read_mesh_mask
 
 if __name__ == "__main__":
@@ -40,6 +43,46 @@ def sub_arguments(subparser):
         "information is not already stored in the meshmask file",
     )
 
+    parser.add_argument(
+        "-p",
+        "--rivers-positions",
+        required=False,
+        type=existing_file_path,
+        default=None,
+        help="The json file that describe the position of the mouth of the"
+        "rivers. If this file is not provided, we will assume that there are "
+        "no rivers on the domain",
+    )
+
+    parser.add_argument(
+        "-s",
+        "--sponge-extent",
+        required=False,
+        default=0,
+        type=int,
+        help="The extent of the sponge layer in number of cells",
+    )
+
+    parser.add_argument(
+        "-o",
+        "--ob-indices",
+        required=True,
+        type=path_inside_an_existing_dir,
+        help="The path of the output file where the OB indices will be "
+        "stored. If this is not submitted, this output file will not be "
+        "written.",
+    )
+
+    parser.add_argument(
+        "-n",
+        "--nudge-indices",
+        required=False,
+        type=path_inside_an_existing_dir,
+        default=None,
+        help="The path of the output file where the nudge indices will be "
+        "stored",
+    )
+
 
 def main(args: argparse.Namespace) -> int:
     if args.cmd != COMMAND_NAME:
@@ -63,4 +106,20 @@ def main(args: argparse.Namespace) -> int:
         mask_array=meshmask[:],
         river_positions=river_map,
     )
-    print(river_mask)
+
+    if args.rivers_positions is not None:
+        rivers_positions = json.loads(args.rivers_positions.read_text())
+    else:
+        rivers_positions = []
+
+    ob_indices, ob_sponge = generate_ob_indices(
+        river_mask=river_mask,
+        sponge_extent=args.sponge_extent,
+        rivers_positions=rivers_positions,
+    )
+
+    args.ob_indices.write_text(ob_indices)
+    if args.nudge_indices is not None:
+        args.nudge_indices.write_text(ob_sponge)
+
+    return 0
