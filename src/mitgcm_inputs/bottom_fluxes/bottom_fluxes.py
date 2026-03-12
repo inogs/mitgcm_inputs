@@ -7,7 +7,6 @@ import numpy as np
 import xarray as xr
 from bitsea.commons.mask import Mask
 
-
 LOGGER = logging.getLogger(__name__)
 
 

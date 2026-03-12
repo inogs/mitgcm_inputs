@@ -9,7 +9,6 @@ from mitgcm_inputs.bottom_fluxes.bottom_fluxes import compute_bottom_fluxes
 from mitgcm_inputs.tools.read_mesh_mask import read_mesh_mask
 from mitgcm_inputs.tools.save_dataset import save_dataset
 
-
 if __name__ == "__main__":
     LOGGER = logging.getLogger()
 else:

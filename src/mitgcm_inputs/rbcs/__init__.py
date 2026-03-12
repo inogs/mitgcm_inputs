@@ -16,7 +16,6 @@ from mitgcm_inputs.rbcs.rbcs_gen import get_spatial_description_from_meshmask
 from mitgcm_inputs.rbcs.scarichi_json_gen import read_sewage_positions
 from mitgcm_inputs.tools.tar_utils import set_tar_file_ownerships
 
-
 if __name__ == "__main__":
     LOGGER = logging.getLogger()
 else:

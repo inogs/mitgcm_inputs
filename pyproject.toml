@@ -18,6 +18,7 @@ copernicusmarine = "^2.3.0"
 matplotlib = "^3.10.8"
 dask = "^2026.1.2"
 ogs-riverger = {git = "https://github.com/inogs/ogs_riverger.git"}
+numba = "^0.64.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -32,6 +33,7 @@ exclude = ["legacy_code/" ]
 [tool.deptry.per_rule_ignores]
 DEP002 = [
     "matplotlib",
+    "numba",
     "openpyxl",
 ]
 

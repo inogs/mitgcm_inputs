@@ -18,8 +18,7 @@ LOGGER = logging.getLogger()
 
 
 def argument():
-    parser = argparse.ArgumentParser(
-        description="""
+    parser = argparse.ArgumentParser(description="""
     Reads sewage info on excel file and for all the domains
     Takes salinity data from MDS service
     build the json files with the coordinate
@@ -28,8 +27,7 @@ def argument():
     PointSource_SAD.json
     ...
 
-    """
-    )
+    """)
 
     parser.add_argument(
         "--inputfile",
