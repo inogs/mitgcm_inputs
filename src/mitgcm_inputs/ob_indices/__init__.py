@@ -121,7 +121,7 @@ def main(args: argparse.Namespace) -> int:
         mesh_mask = domain_mask
 
     ob_indices, ob_sponge = generate_ob_indices(
-        river_mask=mesh_mask,
+        mask=mesh_mask,
         sponge_extent=args.sponge_extent,
         rivers_positions=rivers_positions,
     )
