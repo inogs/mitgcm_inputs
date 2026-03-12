@@ -69,7 +69,7 @@ def sub_arguments(subparser):
     parser.add_argument(
         "-o",
         "--ob-indices",
-        required=True,
+        required=False,
         type=path_inside_an_existing_dir,
         help="The path of the output file where the OB indices will be "
         "stored. If this is not submitted, this output file will not be "
@@ -83,16 +83,24 @@ def sub_arguments(subparser):
         type=path_inside_an_existing_dir,
         default=None,
         help="The path of the output file where the nudge indices will be "
-        "stored",
+        "stored. If this is not submitted, this output file will not be "
+        "written.",
     )
 
 
 def main(args: argparse.Namespace) -> int:
     if args.cmd != COMMAND_NAME:
         LOGGER.error(
-            "%s command has been invoked with command: %s", COMMAND_NAME, args.cmd
+            "%s command has been invoked with command: %s",
+            COMMAND_NAME,
+            args.cmd,
         )
         return 1
+
+    if args.ob_indices is None and args.nudge_indices is None:
+        LOGGER.warning(
+            "No output file has been provided, nothing will be written!!!"
+        )
 
     domain_mask = read_mesh_mask(args.mask)
 
@@ -120,13 +128,14 @@ def main(args: argparse.Namespace) -> int:
         rivers_positions = []
         mesh_mask = domain_mask
 
-    ob_indices, ob_sponge = generate_ob_indices(
+    open_bc_indices, ob_sponge = generate_ob_indices(
         mask=mesh_mask,
         sponge_extent=args.sponge_extent,
         rivers_positions=rivers_positions,
     )
 
-    args.ob_indices.write_text(ob_indices)
+    if args.ob_indices is not None:
+        args.ob_indices.write_text(open_bc_indices)
     if args.nudge_indices is not None:
         args.nudge_indices.write_text(ob_sponge)
 
