@@ -6,7 +6,7 @@ from itertools import product as cart_prod
 from typing import Any
 
 import numpy as np
-from bitsea.commons.mask import MaskWithRivers
+from bitsea.commons.mask import Mask
 from bitsea.components.component_mask_2d import ComponentMask2D
 
 LOGGER = logging.getLogger(__name__)
@@ -89,7 +89,7 @@ def rewrite_in_mitgcm_format(v: np.ndarray) -> list[tuple[int, int]]:
 
 
 def generate_ob_indices(
-    river_mask: MaskWithRivers,
+    mask: Mask,
     sponge_extent: int = 16,
     rivers_positions: Sequence[Mapping[str, Any]] | None = None,
 ):
@@ -121,13 +121,13 @@ def generate_ob_indices(
             open_on_boundary = 1
         else:
             # Here we add a +1 because we need to skip the depth index
-            open_on_boundary = river_mask.shape[domain_index + 1]
+            open_on_boundary = mask.shape[domain_index + 1]
         # This is the value that we use to report that a cell is closed on the
         # boundary
         closed_cell = 0
 
         LOGGER.debug("Cutting %i cells from the %s", cut_cells, side)
-        current_side = cut_at_side(river_mask.get_sea_cells(), side, cut_cells)
+        current_side = cut_at_side(mask.get_sea_cells(), side, cut_cells)
 
         # We only take into account the surface
         current_side_2d = current_side[0, :, :]

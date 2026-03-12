@@ -40,7 +40,10 @@ def sub_arguments(subparser):
         type=existing_file_path,
         help="An auxiliary file that contains the a map that associates each "
         "river cell with its river id. This file is useful only if this "
-        "information is not already stored in the meshmask file",
+        "information is not already stored in the meshmask file and if there "
+        "are rivers on the domain. If the rivers-positions file is not "
+        "provided, we will assume that there are no rivers on the domain "
+        "and this file is simply ignored",
     )
 
     parser.add_argument(
@@ -49,7 +52,7 @@ def sub_arguments(subparser):
         required=False,
         type=existing_file_path,
         default=None,
-        help="The json file that describe the position of the mouth of the"
+        help="The json file that describe the position of the mouths of the"
         "rivers. If this file is not provided, we will assume that there are "
         "no rivers on the domain",
     )
@@ -91,29 +94,34 @@ def main(args: argparse.Namespace) -> int:
         )
         return 1
 
-    meshmask = read_mesh_mask(args.mask)
+    domain_mask = read_mesh_mask(args.mask)
 
+    # On which file do we have the information about the cells occupied by
+    # the rivers?
     if args.river_file is not None:
         file_with_river = args.river_file
     else:
         file_with_river = args.mask
-    with xr.open_dataset(file_with_river) as river_ds:
-        river_map = river_ds["rivers"].load()
 
-    river_mask = MaskWithRivers(
-        grid=meshmask.grid,
-        zlevels=meshmask.zlevels,
-        mask_array=meshmask[:],
-        river_positions=river_map,
-    )
-
+    # If there are rivers in this domain
     if args.rivers_positions is not None:
+        with xr.open_dataset(file_with_river) as river_ds:
+            river_map = river_ds["rivers"].load()
+
+        river_mask = MaskWithRivers(
+            grid=domain_mask.grid,
+            zlevels=domain_mask.zlevels,
+            mask_array=domain_mask[:],
+            river_positions=river_map,
+        )
         rivers_positions = json.loads(args.rivers_positions.read_text())
+        mesh_mask = river_mask
     else:
         rivers_positions = []
+        mesh_mask = domain_mask
 
     ob_indices, ob_sponge = generate_ob_indices(
-        river_mask=river_mask,
+        river_mask=mesh_mask,
         sponge_extent=args.sponge_extent,
         rivers_positions=rivers_positions,
     )
