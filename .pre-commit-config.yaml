@@ -27,9 +27,6 @@ repos:
     # Run the linter.
     - id: ruff
       args: [ --fix ]
-    # Run the formatter.
-    - id: ruff-format
-      args: [--line-length=79]
 - repo: https://github.com/psf/black-pre-commit-mirror
   rev: 26.3.1
   hooks:
