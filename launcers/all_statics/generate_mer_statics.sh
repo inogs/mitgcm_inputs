@@ -82,10 +82,12 @@ process_domain () {
 export -f process_domain
 export OUTPUTDIR BATHYTOOLSDIR MITGCMINPUTSDIR DOMAINS_HR
 
-parallel --lb --tag --halt soon,fail=1 -j ${MAXJOBS} process_domain ::: ${DOMAINS}
-
-### Serial version if parallel is missing
-# for domain in $DOMAINS
-#   do
-#     process_domain $domain
-#   done
+if command -v parallel >/dev/null 2>&1; then
+    parallel --lb --tag --halt soon,fail=1 -j ${MAXJOBS} process_domain ::: ${DOMAINS}
+else
+    echo "GNU parallel not found, falling back to serial execution." >&2
+    for domain in $DOMAINS
+    do
+        process_domain "$domain"
+    done
+fi
