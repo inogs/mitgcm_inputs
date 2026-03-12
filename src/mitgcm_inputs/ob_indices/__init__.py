@@ -90,7 +90,7 @@ def sub_arguments(subparser):
 def main(args: argparse.Namespace) -> int:
     if args.cmd != COMMAND_NAME:
         LOGGER.error(
-            "obindices command has been invoked with command: %s", args.cmd
+            "%s command has been invoked with command: %s", COMMAND_NAME, args.cmd
         )
         return 1
 
