@@ -9,7 +9,6 @@ import numpy as np
 from bitsea.commons.mask import MaskWithRivers
 from bitsea.components.component_mask_2d import ComponentMask2D
 
-
 LOGGER = logging.getLogger(__name__)
 
 

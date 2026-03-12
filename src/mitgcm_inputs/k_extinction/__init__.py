@@ -8,7 +8,6 @@ from bitsea.utilities.argparse_types import path_inside_an_existing_dir
 from mitgcm_inputs.k_extinction.k_extinction import compute_k_extinction
 from mitgcm_inputs.tools.read_mesh_mask import read_mesh_mask
 
-
 if __name__ == "__main__":
     LOGGER = logging.getLogger()
 else:

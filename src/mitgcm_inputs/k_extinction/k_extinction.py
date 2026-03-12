@@ -8,7 +8,6 @@ from bitsea.commons.mask import Mask
 from scipy.interpolate import LinearNDInterpolator
 from scipy.spatial import Delaunay
 
-
 DATA_FILE = Path(__file__).resolve().parent / "data" / "kExt_climatology.nc"
 
 

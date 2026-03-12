@@ -27,7 +27,6 @@ from mitgcm_inputs.surface_deposition import COMMAND_NAME as SD_COMMAND_NAME
 from mitgcm_inputs.surface_deposition import main as sd_main
 from mitgcm_inputs.surface_deposition import sub_arguments as sd_sub_arguments
 
-
 if __name__ == "__main__" or __name__ == "mitgcm_inputs.__main__":
     LOGGER = logging.getLogger()
 else:

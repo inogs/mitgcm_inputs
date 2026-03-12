@@ -11,7 +11,6 @@ from mitgcm_inputs.surface_deposition.surface_deposition import (
 from mitgcm_inputs.tools.read_mesh_mask import read_mesh_mask
 from mitgcm_inputs.tools.save_dataset import save_dataset
 
-
 if __name__ == "__main__":
     LOGGER = logging.getLogger()
 else:
