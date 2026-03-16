@@ -198,12 +198,13 @@ def generate_ob_indices(
             for cell in river_sources:
                 open_bc_cells[cell[domain_index]] = cell[sponge_index] + 1
 
-        ob_indices += f"OB_I{side}="
+        direction_char = "J" if side in (Side.NORTH, Side.SOUTH) else "I"
+        ob_indices += f"OB_{direction_char}{side}="
         for i in rewrite_in_mitgcm_format(open_bc_cells):
             ob_indices += f"{i[0]}*{i[1]},"
         ob_indices += "\n"
 
-        ob_sponge += f"nudgOB_I{side}="
+        ob_sponge += f"nudgOB_{direction_char}{side}="
         for i in rewrite_in_mitgcm_format(sponge_cells):
             ob_sponge += f"{i[0]}*{i[1]},"
         ob_sponge += "\n"
