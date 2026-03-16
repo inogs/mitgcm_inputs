@@ -7,8 +7,7 @@ from bitsea.utilities.argparse_types import existing_file_path
 
 
 def argument():
-    parser = argparse.ArgumentParser(
-        description="""
+    parser = argparse.ArgumentParser(description="""
     Reads seawage info on excel file and for all the domains
     build the json files with the coordinate of the pointsource
     for E.Coli tracers
@@ -16,8 +15,7 @@ def argument():
     RiverSource_SAD.json
     ...
 
-    """
-    )
+    """)
 
     parser.add_argument(
         "--inputfile",

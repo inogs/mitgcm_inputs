@@ -20,13 +20,11 @@ from ogs_riverger.read_config import RiverConfig
 
 from mitgcm_inputs.tools.read_mesh_mask import read_mesh_mask
 
-
 LOGGER = logging.getLogger(__name__)
 
 
 def argument():
-    parser = argparse.ArgumentParser(
-        description="""
+    parser = argparse.ArgumentParser(description="""
     Generates RBCs files
     3D Files:
     - bottom_sources_S_mask.bin
@@ -63,8 +61,7 @@ def argument():
                         - Rivers_positions.json is expected
                         - output files are dumped
 
-    """
-    )
+    """)
     parser.add_argument(
         "--sewage",
         "-s",
