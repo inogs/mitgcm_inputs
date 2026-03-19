@@ -1,61 +1,35 @@
 import argparse
 import json
 import os
-from datetime import dt
+from datetime import datetime as dt
 from pathlib import Path
 
 import julian
-import matplotlib.pyplot as plt
 import numpy as np
 import pyTMD
 from scipy.interpolate import interp1d
-from scipy.io import loadmat
-
-
-def period_from_doodson(cartwright_multipliers, date):
-    """
-    Compute the period in seconds from Cartwright multipliers.
-    """
-    # Angular frequencies of the six fundamental astronomical arguments
-    # (in degrees/hour)
-    # These are approximate values based on IERS conventions
-    frequencies_deg_per_hr = np.array(
-        [
-            14.49205211,  # Mean lunar time (τ)
-            0.54901653,  # Mean longitude of the Moon (s)
-            0.04106864,  # Mean longitude of the Sun (h)
-            0.00464184,  # Longitude of lunar perigee (p)
-            -0.00220641,  # Longitude of ascending node (N')
-            0.00000196,  # Longitude of solar perihelion (p_s)
-        ]
-    )
-    fr_dg_hr = np.dot(cartwright_multipliers, frequencies_deg_per_hr)
-    fr_Hz = fr_dg_hr / 360.0 / 3600  # Convert degrees/hour to cycles/hour
-
-    astro_args = pyTMD.astro.doodson_arguments(date)
-
-    ph_ = np.dot(cartwright_multipliers, astro_args)
-
-    return 1 / fr_Hz, ph_
 
 
 def create_tide_bc_second(
-    path_grid,
-    grid,
-    cbdry_used,
-    tide_num,
-    time_nodal,
+    path_results,
     path_tides,
-    model_file,
-    dbg,
+    tide_model,
+    tide_num,
+    cbdry_used,
+    grid_dims,
+    time_nodal,
+    endian_val,
 ):
+
+
+
     """ "
     Input: grid[0] the size of first dimension of MITgcm domain
     grid[1] the size of second dimension of MITgcm domain
     cbdry_used, cell array specify which boundary to add tidal
     boundary condition,
     {'s', 'n', 'w', 'e'}, South, North, West, and East
-    If there is no ocean points on one boundary, donot specify it.
+    If there is no ocean points on one boundary, do not specify it.
     Otherwise it will generate an error in interpolation.
     For this case, use tide_bc_empty to generate a zero amplitude tide BC.
     tide_num: tidal components to be included in tidal BC file
@@ -73,20 +47,18 @@ def create_tide_bc_second(
               m2  s2  n2  k2  k1  o1  p1  q1 mf mm
               1   2   3   4   5   6   7   8  9  10
     4) The phase generated here inludes the Greenwich Phase of tidal
-        constituent,nodal correction term, and a time constant in order to use
+        constituent, nodal correction term, and a time constant in order to use
         nodal correction formula of CAT2008b
         phase_in_second = ( tidal_period*phase_in_radian/2*pi - mitgcm_timec)
-    5) CAT2008 directory needs to be specified in test_tide_bc.m
-        as following,  addpath /data17/home/xiao/CAT/Tool/TMD2.03
     """
+
     # Constants
     sec_in_day = 86400
     # not used c8 = 8,  c4 =4
 
     # Dimension of Boundary files
-    NX = grid[0]
-    NY = grid[1]
-    mat = False
+    NX = grid_dims[0]
+    NY = grid_dims[1]
 
     # Set the Boundary to add tides
     # AngleCS_bc, AngleSN_bc are the Cos and Sin and angle
@@ -94,96 +66,66 @@ def create_tide_bc_second(
     # from due east
 
     for c_bdry in cbdry_used:
-        if mat:
-            bdry_file = path_grid + f"bdry_grid_{c_bdry}.mat"
-            data = loadmat(bdry_file)
-            lat_bc = data["lat_bc"].flatten()  #
-            lon_bc = data["lon_bc"].flatten()
-            depth_bc = data["depth_bc"].flatten()
-            AngleCS_bc = data["AngleCS_bc"].flatten()
-            AngleSN_bc = data["AngleSN_bc"].flatten()
-        else:
-            bdry_file = path_grid + f"bdry_grid_{c_bdry}.npy"
-            print(bdry_file)
-            data = np.load(bdry_file, allow_pickle=True).item()
-            for name, arr in data.items():
-                print("loaded_array:\n", name, arr.shape)
-                print(arr[0], arr[:-1])
-            lat_bc = data["lat_bc"]
-            lon_bc = data["lon_bc"]
-            depth_bc = data["depth_bc"]
-            AngleCS_bc = data["AngleCS_bc"]
-            AngleSN_bc = data["AngleSN_bc"]
 
-        cob = c_bdry.upper()
-        fld = ["am", "ph"]
+        bdry_file = path_results / f"bdry_grid_{c_bdry}.npy"
+        print(bdry_file)
+        data = np.load(bdry_file, allow_pickle=True).item()
+        for name, arr in data.items():
+            print("loaded_array:\n", name, arr.shape)
+            print(name, arr.shape,"min/max:", np.nanmin(arr), np.nanmax(arr))
+        lat_bc = data["lat_bc"]
+        lon_bc = data["lon_bc"]
+        depth_bc = data["depth_bc"]
+        AngleCS_bc = data["AngleCS_bc"]
+        AngleSN_bc = data["AngleSN_bc"]
 
-        OBlength = NX if cob in ["N", "S"] else NY
+        boundary = c_bdry.upper()
+
+        OBlength = NX if boundary in ["N", "S"] else NY
         print("\n --------------------------------------------------\n")
         print(
             "Computing Tidal forcing on boundary",
             c_bdry,
             "\n over a grid of lon size",
             len(lon_bc),
-            "and lat",
+            "and lat size",
             len(lat_bc),
         )
-        # Extract tidal components
-        TMDwidgets = pyTMD.tools.widgets()
-        TMDwidgets.directory.value = path_tides
-        print("directory", TMDwidgets.directory.value)
-        model = pyTMD.io.model(
-            TMDwidgets.directory.value, compressed=TMDwidgets.compress.value
-        ).current(model_file)
-        model.constituents = model.constituents or [
-            "k1"
-        ]  # in any case it will extract all components
+        ## Load tide model
 
-        # Nodal correction
-        time0 = time_nodal
-        print(time0.strftime("%j"))
-        time1992 = dt(1992, 1, 1)
-        time_diff = (time0 - time1992).days + 48622
-        print("time0", time0)
-        print("time1992", time1992)
-        print("time diff", time_diff)
-        pu, pf, G = nodal(time_diff, tide_num)
-        print("Nodal corrections:\n", pu, "\n", pf, "\n", np.deg2rad(G))
+        # TMDwidgets = pyTMD.tools.widgets()
+        # TMDwidgets.directory.value = path_tides
+        # print("directory", TMDwidgets.directory.value)
+        # model = pyTMD.io.model(
+        #     TMDwidgets.directory.value, compressed=TMDwidgets.compress.value
+        # ).current(tide_model)
 
-        for cons in tide_num:
-            cart = pyTMD.arguments.doodson_number(cons, formalism="Cartwright")
-            [p, h] = period_from_doodson(
-                cart, julian.to_jd(time1992, fmt="jd")
-            )
-            print(cons, "Period", p, "and phase", h[:])
-        # astro_phase =1.7316  0 6.0507 3.4876 0.1730 1.5586 6.1102 5.8777
+        model = pyTMD.io.model(path_tides).current(tide_model)
 
-        print(
-            "Loading tide database",
-            model_file,
-            "\nModel type:",
-            model.type,
-            "\nloaded!",
-        )
-        # Calcolo delle componenti di marea
+        ## Extract tidal constants for each constituent (harmonic constants)
+
+        # Returned phases are Greenwich phases or Greenwich phase lag (in degrees)
+        # pyTMD returns one value per boundary grid point for each constituent
+        # in tide_num. However some points are NaN and these NaNs can appear
+        # anywhere along the boundary. Because of this we later do intp_line_safe
         uamp, upha, conlist0 = model.extract_constants(
             lon_bc,
             lat_bc,
-            type="u",
-            constituents=model.constituents,
+            type="U",
+            constituents=tide_num,
             method="bilinear",
             extrapolate="linear",
         )
         vamp, vpha, conlist0 = model.extract_constants(
             lon_bc,
             lat_bc,
-            type="v",
-            constituents=model.constituents,
+            type="V",
+            constituents=tide_num,
             method="bilinear",
             extrapolate="linear",
         )
 
-        print("Tidal constants computed")
+        print("Tidal constants extracted in ", c_bdry, " boundary")
 
         if uamp.shape[0] != len(tide_num):
             uamp = np.transpose(uamp)
@@ -191,482 +133,223 @@ def create_tide_bc_second(
             upha = np.transpose(upha)
             vpha = np.transpose(vpha)
 
-        mitgcm_timec = (time_nodal - time1992).days * sec_in_day
+        ## Compute nodal corrections for each constituent at time_nodal
+        time0 = time_nodal
+        # print(time0.strftime("%j"))
+        # time1992 = dt(1992, 1, 1)
+        # time_diff = (time0 - time1992).days + 48622
+        # print("time0", time0)
+        # print("time1992", time1992)
+        # print("time diff", time_diff)
 
-        amp_all = np.zeros((OBlength, len(tide_num)))
-        pha_all_sec = np.zeros((OBlength, len(tide_num)))
+        MJD = julian.to_jd(time0, fmt="mjd")
 
-        period = []
-        ph_astro = []
-        for cons in conlist0:
-            cart = pyTMD.arguments.doodson_number(cons, formalism="Cartwright")
-            [p, h] = period_from_doodson(cart, julian.to_jd(time0, fmt="jd"))
-            period.append(p)
-            ph_astro.append(h)
+        pu, pf, G = nodal(MJD, conlist0)
 
-        if dbg:
-            # Get the frequency of the tidal constituents
-            test_period_name = ["m2", "s2", "n2", "k2", "k1", "o1", "p1", "q1"]
-            test_period = (
-                np.array(
-                    [
-                        4.4714,
-                        4.3200,
-                        4.5570,
-                        4.3082,
-                        8.6164,
-                        9.2950,
-                        8.6637,
-                        9.6726,
-                    ]
-                )
-                * 10000
-            )
-            # omega=1.0e-03*(0.1405    0.1454    0.1379    0.1458
-            # 0.0729    0.0676    0.0725    0.0650)
-            astro_phase = [
-                1.7316,
-                0,
-                6.0507,
-                3.4876,
-                0.1730,
-                1.5586,
-                6.1102,
-                5.8777,
-            ]
-            u_am_test = [
-                0.1072,
-                0.0432,
-                0.0219,
-                0.0120,
-                0.0197,
-                0.0053,
-                0.0063,
-                0.0014,
-            ]
-            u_ph_test = [
-                186.6336,
-                204.4545,
-                167.9701,
-                203.3880,
-                176.5207,
-                98.5462,
-                168.2018,
-                343.8042,
-            ]
-            v_am_test = [
-                0.2291,
-                0.0866,
-                0.0477,
-                0.0241,
-                0.0280,
-                0.0110,
-                0.0085,
-                0.0021,
-            ]
-            v_ph_test = [
-                144.2639,
-                162.8822,
-                132.6580,
-                160.9392,
-                105.7161,
-                26.7373,
-                93.2294,
-                307.8001,
-            ]
-            # pu_test = [
-            #     -0.0056,
-            #     0,
-            #     -0.0056,
-            #     -0.0502,
-            #     -0.0278,
-            #     0.0371,
-            #     0,
-            #     0.0354,
-            # ]  # radians
-            # pf_test = [
-            #     1.0374,
-            #     1.0000,
-            #     1.0374,
-            #     0.7500,
-            #     0.8831,
-            #     0.8083,
-            #     1.0000,
-            #     0.8147,
-            # ]
-            # amp_final =[ 0.0022    0.0008    0.0005    0.0002    0.0002
-            #              0.0001    0.0001    0.0000]
-            #           [ 0.0043    0.0015    0.0008    0.0003    0.0004
-            #              0.0001    0.0001    0.0000]
-            # pha_final =[ 0.7920    2.8428    2.5534   -0.6285    1.6999
-            #             -1.1290    1.8002   -0.5410]
-            #           [ 0.4671    2.5144    2.1877   -0.9541    1.2390
-            #             -1.3954    1.3881   -1.1935]
-            # ans =     0.1072  186.6336    0.2291  144.2639
-            # ans =    0.0590  164.6456    0.0875  125.6505
-            # ans =    0.1112    1.5315    0.2376    0.7920
-            # ans =    0.0612    1.1477    0.0908    0.4671
-            # ans =    0.0010   87.7456    0.0022   45.3760
-            # ans =    0.0029   65.7576    0.0043   26.7625
+        print("Nodal corrections in radians:\n", pu, "\n", pf)
 
-            for index, itide in enumerate(conlist0):
-                if itide in tide_num:
-                    inx = tide_num.index(itide)
-                    u_am = uamp[index, :]
-                    u_ph = upha[index, :]
-                    v_am = vamp[index, :]
-                    v_ph = vpha[index, :]
-                    print(
-                        "Tide",
-                        itide,
-                        "u_am",
-                        u_am[0],
-                        "u_ph",
-                        u_ph[0],
-                        "v_am",
-                        v_am[0],
-                        "v_ph",
-                        v_ph[0],
-                    )
-                    for i, name in enumerate(test_period_name):
-                        if name == itide:
-                            print(
-                                "----",
-                                name,
-                                "----",
-                                u_am_test[i],
-                                "------------------",
-                                u_ph_test[i],
-                                "------------------",
-                                v_am_test[i],
-                                "------------------",
-                                v_ph_test[i],
-                            )
+        ## Get constituent parametres
 
-            for index, itide in enumerate(conlist0):
-                if itide in tide_num:
-                    index = conlist0.index(itide)
-                    print(
-                        "Period", period[index], "for tidal component", itide
-                    )
-                    for i, name in enumerate(test_period_name):
-                        if name == itide:
-                            print(
-                                "------",
-                                test_period[i],
-                                "--------------------------",
-                                name,
-                            )
+        # amp     = np.zeros(len(tide_num))
+        ph      = np.zeros(len(conlist0))
+        omega   = np.zeros(len(conlist0))
+        # alpha   = np.zeros(len(tide_num))
+        # species = np.zeros(len(tide_num))
 
-        # Must filtering out only the required tidal components
-        for index, itide in enumerate(conlist0):
-            if itide in tide_num:
-                inx = tide_num.index(
-                    itide
-                )  # Get the index of itide in tide_num
-                print(
-                    "Add tidal component",
-                    itide,
-                    "index ",
-                    index,
-                    "dimensions",
-                    len(uamp),
-                )
-                utide_am0 = uamp[index, :]
-                utide_ph0 = upha[index, :]
-                vtide_am0 = vamp[index, :]
-                vtide_ph0 = vpha[index, :]
+        for i, c in enumerate(conlist0):
+            amp_c, ph_c, omega_c, alpha_c, species_c = pyTMD.arguments._constituent_parameters(c)
 
-                if cob in ["N", "S"]:
-                    utide_am0 = intp_line_safe(utide_am0, lon_bc)
-                    utide_ph0 = intp_line_safe(utide_ph0, lon_bc)
-                    vtide_am0 = intp_line_safe(vtide_am0, lon_bc)
-                    vtide_ph0 = intp_line_safe(vtide_ph0, lon_bc)
-                else:
-                    utide_am0 = intp_line_safe(utide_am0, lat_bc)
-                    utide_ph0 = intp_line_safe(utide_ph0, lat_bc)
-                    vtide_am0 = intp_line_safe(vtide_am0, lat_bc)
-                    vtide_ph0 = intp_line_safe(vtide_ph0, lat_bc)
-                for in_ in [0, len(utide_am0) - 1]:
-                    print("index", in_)
-                    print(
-                        itide,
-                        "utide_am0",
-                        utide_am0[in_],
-                        "utide_ph0",
-                        utide_ph0[in_],
-                        "vtide_am0",
-                        vtide_am0[in_],
-                        "vtide_ph0",
-                        vtide_ph0[in_],
-                    )
-                    if itide == "m2":
-                        if in_ == 0:
-                            print(
-                                "--_________",
-                                0.1072,
-                                "--------------",
-                                186.6336,
-                                "--------------",
-                                0.2291,
-                                "--------------",
-                                144.2639,
-                            )
-                        if in_ == len(utide_am0) - 1:
-                            print(
-                                "--_________",
-                                0.0590,
-                                "--------------",
-                                164.6456,
-                                "--------------",
-                                0.08758,
-                                "--------------",
-                                125.6505,
-                            )
+            omega[i] = omega_c # rad/s
+            ph[i]    = ph_c # rad
 
-                # Apply nodal correction
-                correction = astro_phase[inx] + pu[0][inx]
+        period = 2*np.pi/omega #seconds
 
-                utide_ph0 = np.deg2rad(utide_ph0) - correction
-                vtide_ph0 = np.deg2rad(vtide_ph0) - correction
-                vtide_am0 = vtide_am0 * pf[0][inx]
+        ## Loop over constituents
 
-                for in_ in [0, len(utide_am0) - 1]:
-                    print("index", in_)
-                    print(
-                        "-- pf *  am0",
-                        utide_am0[in_],
-                        "utide_ph0",
-                        utide_ph0[in_],
-                        "vtide_am0",
-                        vtide_am0[in_],
-                        "vtide_ph0",
-                        vtide_ph0[in_],
-                    )
-                    if itide == "m2":
-                        if in_ == 0:
-                            print(
-                                "--_________",
-                                0.1112,
-                                "---------------",
-                                1.5315,
-                                "--------------",
-                                0.2376,
-                                "--------------",
-                                0.7920,
-                            )
-                        if in_ == len(utide_am0) - 1:
-                            print(
-                                "--_________",
-                                0.0612,
-                                "---------------",
-                                1.1477,
-                                "--------------",
-                                0.0908,
-                                "--------------",
-                                0.4671,
-                            )
-                utide_ph0 = np.rad2deg(utide_ph0)
-                vtide_ph0 = np.rad2deg(vtide_ph0)
-                utide_am0 /= depth_bc
-                vtide_am0 /= depth_bc
-                utide_am1, utide_ph1, vtide_am1, vtide_ph1 = tide_rot(
-                    utide_am0,
-                    utide_ph0,
-                    vtide_am0,
-                    vtide_ph0,
-                    AngleCS_bc,
-                    AngleSN_bc,
-                )
-                for in_ in [0, len(utide_am1) - 1]:
-                    print("index", in_)
-                    print(
-                        "-- depth* am1",
-                        utide_am1[in_],
-                        "utide_ph1",
-                        utide_ph1[in_],
-                        "vtide_am1",
-                        vtide_am1[in_],
-                        "vtide_ph1",
-                        vtide_ph1[in_],
-                    )
-                    if itide == "m2":
-                        if in_ == 0:
-                            print(
-                                "--_________",
-                                0.0010,
-                                "---------------",
-                                87.7456,
-                                "---------------",
-                                0.0022,
-                                "-----------------",
-                                45.3760,
-                            )
-                        if in_ == len(utide_am1) - 1:
-                            print(
-                                "--_________",
-                                0.0029,
-                                "---------------",
-                                65.7576,
-                                "-----------------",
-                                0.0043,
-                                "----------------",
-                                26.7625,
-                            )
-                if cob in ["N", "S"]:
-                    amp_all[:, inx] = vtide_am1
-                    pha_all_rad = np.deg2rad(vtide_ph1)
-                    pha_all_sec[:, inx] = (
-                        period[index] * np.deg2rad(vtide_ph1) / (2 * np.pi)
-                        - mitgcm_timec
-                    )
-                else:
-                    amp_all[:, inx] = utide_am1
-                    pha_all_sec[:, inx] = (
-                        period[index] * np.deg2rad(utide_ph1) / (2 * np.pi)
-                        - mitgcm_timec
-                    )
+        # create out arrays for all boundary points and all constituents data
+        L = NX if boundary in ['N','S'] else NY
 
+        amp_out = np.zeros((L, len(conlist0)))
+        pha_out_deg = np.zeros((L, len(conlist0)))
+        pha_out_sec = np.zeros((L, len(conlist0)))
+
+
+        print("Filling NaNs along the boundary and applying corrections for each constitutent")
+        for i, c in enumerate(conlist0):
+
+            coord_1d = np.arange(len(uamp[i,:]))
+
+            ua_c = intp_line_safe(uamp[i,:], coord_1d) # Fill NaNs along a 1-D boundary line
+            up_c = intp_line_safe(upha[i,:], coord_1d)
+            va_c = intp_line_safe(vamp[i,:], coord_1d)
+            vp_c = intp_line_safe(vpha[i,:], coord_1d)
+
+            # Apply nodal correction
+            # Tidal prediction in MItgcm will be:
+            # pf*amp*cos[omega(t-time0+time0-time1992) -(pha - ph - pu)], where pha-ph-pu
+            # will be the phase output from this script that we will give to the MITgcm
+
+            ua_c *= pf[0,i] #dims of pf are= 1,len(tide_num), 1 because we only calculate nodal corrections for one
+            va_c *= pf[0,i]
+            up_c = np.deg2rad(up_c) - ph[i] - pu[0,i]
+            vp_c = np.deg2rad(vp_c) - ph[i] - pu[0,i]
+
+            up_c = np.rad2deg(up_c)
+            vp_c = np.rad2deg(vp_c)
+
+            # depth normalized velocities
+            ua_c /= depth_bc
+            va_c /= depth_bc
+
+            # rotate into model grid
+            ua_cr, up_cr, va_cr, vp_cr = tide_rot(ua_c, up_c, va_c, vp_c, AngleCS_bc, AngleSN_bc)
+
+            # save data in these arrays
+            time1992 = dt(1992, 1, 1)
+            mitgcm_timec = (time_nodal - time1992).days * sec_in_day
+
+            if boundary in ["N", "S"]:
+                amp_out[:, i] = va_cr
+                pha_out_deg[:,i] = vp_cr
+                pha_out_sec[:, i] = (period[i] * np.deg2rad(vp_cr) / (2 * np.pi)- mitgcm_timec)
             else:
-                print("Tidal component", itide, "not in tide_num, skipping")
-                continue
-        for in_ in [0, len(utide_am0) - 1]:
-            for inx in range(len(tide_num)):
-                print("index", in_)
-                print(
-                    "-- all am",
-                    amp_all[in_, inx],
-                    "pha_all_rad",
-                    pha_all_rad[in_],
-                    "uph all sec",
-                    pha_all_sec[in_, inx],
-                )
-                if itide == "m2":
-                    if in_ == 0:
-                        print(
-                            "--_________",
-                            0.0022,
-                            "---------------",
-                            0.7920,
-                            "---------------",
-                            4.1023,
-                        )
-                    if in_ == len(utide_am0) - 1:
-                        print(
-                            "--_________",
-                            0.0043,
-                            "---------------",
-                            0.4671,
-                            "---------------",
-                            4.1023,
-                        )
+                amp_out[:, i] = ua_cr
+                pha_out_deg[:,i] = up_cr
+                pha_out_sec[:, i] = (period[i] * np.deg2rad(up_cr) / (2 * np.pi)- mitgcm_timec)
 
-        amp_all[np.isnan(amp_all)] = 0
-        pha_all_sec[np.isnan(pha_all_sec)] = 0
-        np.save("data_lon_" + c_bdry + ".npy", lon_bc)
-        np.save("data_lat_" + c_bdry + ".npy", lat_bc)
-        np.save("data_depth_" + c_bdry + ".npy", depth_bc)
+        amp_out[np.isnan(amp_out)] = 0
+        pha_out_deg[np.isnan(pha_out_deg)] = 0
+        pha_out_sec[np.isnan(pha_out_sec)] = 0
 
-        np.save("data_am_all_" + c_bdry + ".npy", amp_all)
-        np.save("data_ph_all_" + c_bdry + ".npy", pha_all_sec)
+        print("Saving results for each constitutent")
 
+        fname_lon = "data_lon_" + c_bdry + ".npy"
+        fname_lat = "data_lat_" + c_bdry + ".npy"
+        fname_depth = "data_depth_" + c_bdry + ".npy"
+        fname_am_all = "data_am_all_" + c_bdry + ".npy"
+        fname_ph_all = "data_ph_all_" + c_bdry + ".npy"
+        fname_ph_all_deg = "data_ph_all_deg_" + c_bdry + ".npy"
+
+
+        np.save(path_results / fname_lon, lon_bc)
+        np.save(path_results / fname_lat, lat_bc)
+        np.save(path_results / fname_depth, depth_bc)
+
+        np.save(path_results / fname_am_all, amp_out)
+        np.save(path_results / fname_ph_all, pha_out_sec)
+        np.save(path_results / fname_ph_all_deg, pha_out_deg)
+
+        fld = ["am", "ph"]
         cfld = fld[0]
-        fnm = f"OB{cob}{cfld}_med.tide_obcs"
-        writebin(fnm, amp_all)
+        fnm = path_results / f"OB{boundary}{cfld}_med.tide_obcs"
+        writebin(str(fnm), amp_out, endian=endian_val)
 
         cfld = fld[1]
-        fnm = f"OB{cob}{cfld}_med.tide_obcs"
-        writebin(fnm, pha_all_sec)
+        fnm = path_results / f"OB{boundary}{cfld}_med.tide_obcs"
+        writebin(str(fnm), pha_out_sec, endian=endian_val)
 
-        del utide_am0, utide_ph0, utide_am1, utide_ph1
-        del vtide_am0, vtide_ph0, vtide_am1, vtide_ph1
-        del pha_all_sec
     return True
 
 
-def tide_rot(utide_am0, utide_ph0, vtide_am0, vtide_ph0, angleCS, angleSN):
+def tide_rot(ua_c, up_c, va_c, vp_c, angleCS, angleSN):
     """
     Rotate tidal current parameter from NS and EW to a new coordinate
     defined by angleCS and angleSN
     Input:
-       utide_am0, utide_ph0(in deg)
-       vtide_am0, vtide_ph0(in deg)
+       ua_c, up_c(in deg)
+       va_c, vp_c(in deg)
        AngleCS  angleSN:  cos(alpha), sin(alpha);
-       alpha is the angle between new coordinate (utide_am1, vtide_am1)
+       alpha is the angle between new coordinate (ua_cr, va_cr)
        and due east
     Output:
-        utide_am1, utide_ph1(in deg)
-        vtide_am1, vtide_ph1(in deg);
+        ua_cr, up_cr(in deg)
+        va_cr, vp_cr(in deg);
     Both input and output are assumed (1 L) array "
     """
     # Convert degrees to radians
-    utide_ph0 = np.deg2rad(utide_ph0)
-    vtide_ph0 = np.deg2rad(vtide_ph0)
+    up_c = np.deg2rad(up_c)
+    vp_c = np.deg2rad(vp_c)
 
     # Calculate the new u-component amplitude and phase
-    u1_p1 = utide_am0 * angleCS * np.cos(
-        utide_ph0
-    ) + vtide_am0 * angleSN * np.cos(vtide_ph0)
-    u1_p2 = utide_am0 * angleCS * np.sin(
-        utide_ph0
-    ) + vtide_am0 * angleSN * np.sin(vtide_ph0)
+    u1_p1 = ua_c * angleCS * np.cos(
+        up_c
+    ) + va_c * angleSN * np.cos(vp_c)
+    u1_p2 = ua_c* angleCS * np.sin(
+        up_c
+    ) + va_c * angleSN * np.sin(vp_c)
 
-    utide_am1 = np.sqrt(u1_p1**2 + u1_p2**2)
-    sin1 = u1_p2 / utide_am1
-    cos1 = u1_p1 / utide_am1
-    utide_ph1 = np.arctan2(sin1, cos1)
-    utide_ph1 = np.rad2deg(utide_ph1)
+    ua_cr = np.sqrt(u1_p1**2 + u1_p2**2)
+
+    # sin1 = u1_p2 / ua_cr
+    # cos1 = u1_p1 / ua_cr
+    # up_cr = np.arctan2(sin1, cos1)
+    # up_cr = np.rad2deg(up_cr)
+    up_cr = np.zeros_like(ua_cr)
+    mask = ua_cr > 0 # To ensure that we do not divide by 0
+    up_cr[mask] = np.rad2deg(np.arctan2(u1_p2[mask], u1_p1[mask]))
 
     # Calculate the new v-component amplitude and phase
-    v1_p1 = -utide_am0 * angleSN * np.cos(
-        utide_ph0
-    ) + vtide_am0 * angleCS * np.cos(vtide_ph0)
-    v1_p2 = -utide_am0 * angleSN * np.sin(
-        utide_ph0
-    ) + vtide_am0 * angleCS * np.sin(vtide_ph0)
-    vtide_am1 = np.sqrt(v1_p1**2 + v1_p2**2)
-    sin1 = v1_p2 / vtide_am1
-    cos1 = v1_p1 / vtide_am1
-    vtide_ph1 = np.arctan2(sin1, cos1)
-    vtide_ph1 = np.rad2deg(vtide_ph1)
+    v1_p1 = -ua_c * angleSN * np.cos(
+        up_c
+    ) + va_c * angleCS * np.cos(vp_c)
+    v1_p2 = -ua_c * angleSN * np.sin(
+        up_c
+    ) + va_c * angleCS * np.sin(vp_c)
+    va_cr = np.sqrt(v1_p1**2 + v1_p2**2)
+    # sin1 = v1_p2 / va_cr
+    # cos1 = v1_p1 / va_cr
+    # vp_cr = np.arctan2(sin1, cos1)
+    # vp_cr = np.rad2deg(vp_cr)
+    vp_cr = np.zeros_like(va_cr)
+    mask = va_cr > 0 # To ensure that we do not divide by 0
+    vp_cr[mask] = np.rad2deg(np.arctan2(v1_p2[mask], v1_p1[mask]))
 
     # Return the new amplitudes and phases
-    return utide_am1, utide_ph1, vtide_am1, vtide_ph1
+    return ua_cr, up_cr, va_cr, vp_cr
 
 
-def intp_line_safe(utide, lat_bc):
+def nodal(MJD, conlist):
     """
-    Interpolate to all the BC grid
-    Input:  utide, lat_bc, utide has NaN
-    Output: utide, does not have Nan
-    NB:The 'cubic' option in interp1d is used to approximate
-    the 'spline' method in MATLAB.
+    function to compute nodal corrections for tidal constituents
+    USAGE:
+    [pu,pf,G]=nodal(MJD,tide_num)
+    PARAMETERS:
+    MJD: Modified Julian Date
+    tide_num: list of tidal constituents
+    OUTPUT:
+    pu, pf: nodal corrections for the constituents
+    G: phase correction in degrees
+    """
+    pu, pf, G = pyTMD.arguments.arguments(
+        MJD, conlist)  # pu in radians and G in degrees
+    return pu, pf, G
+
+
+def intp_line_safe(values, coord):
+    """
+    Fill NaNs along a 1-D boundary line
+    Input:  values, has NaN, coord=index of values
+    Output: values_int, does not have Nan
     """
     # Identify the indices of bad (NaN or infinite) and good
     # (finite) values in utide
-    badp = ~np.isfinite(utide)
-    goodp = np.isfinite(utide)
+    badp = ~np.isfinite(values)
+    goodp = np.isfinite(values)
 
-    # Perform spline interpolation for bad values using good values
-    spline_interp = interp1d(
-        lat_bc[goodp], utide[goodp], kind="cubic", fill_value="extrapolate"
+    if np.sum(goodp) < 2:
+        return np.zeros_like(values)
+
+    # Perform linear interpolation for bad values using good values
+    f = interp1d(
+        coord[goodp], values[goodp], kind="linear", fill_value="extrapolate"
     )
-    utide[badp] = spline_interp(lat_bc[badp])
 
-    # Re-identify bad values after the first interpolation
-    badp = ~np.isfinite(utide)
-    goodp = np.isfinite(utide)
-
-    # Perform nearest neighbor interpolation for remaining bad values
-    nearest_interp = interp1d(
-        lat_bc[goodp], utide[goodp], kind="nearest", fill_value="extrapolate"
-    )
-    utide[badp] = nearest_interp(lat_bc[badp])
-
-    return utide
+    values_int = values.copy()
+    values_int[badp] = f(coord[badp]) #Fill missing points by loooking at neighboring points
+    return values_int
 
 
-def tide_bc_empty(grid, cbdry_used, tide_num):
+def tide_bc_empty(grid, cbdry_used, tide_num, path_results, endian_val):
     """
     Make a dummy tidal boundary condition based on the size of nx and ny
     with zero amplitude and phase.
@@ -703,113 +386,43 @@ def tide_bc_empty(grid, cbdry_used, tide_num):
             OBlength = grid[1]
 
         # Initialize amplitude and phase arrays
-        amp_all = np.zeros((OBlength, len(tide_num)))
-        pha_all = np.zeros((OBlength, len(tide_num)))
+        amp_out = np.zeros((OBlength, len(tide_num)))
+        pha_out_sec = np.zeros((OBlength, len(tide_num)))
 
         # Write amplitude file
-        amp_filename = f"OB{c_bdry}am_med.tide_obcs"
-        writebin(amp_filename, amp_all)
+        amp_filename = path_results / f"OB{c_bdry}am_med.tide_obcs"
+        writebin(str(amp_filename), amp_out, endian=endian_val)
 
         # Write phase file
-        ph_filename = f"OB{c_bdry}ph_med.tide_obcs"
-        writebin(ph_filename, pha_all)
+        ph_filename = path_results / f"OB{c_bdry}ph_med.tide_obcs"
+        writebin(str(ph_filename), pha_out_sec, endian=endian_val)
     return
 
-
-def readbin(
-    fnam, siz=(360, 224, 46), typ=1, prec="float32", skip=0, mform="<"
-):
+def writebin(fnam, fld, prec="float32", endian="big", skip=0, typ=1):
     """
-    Function to read N-D binary field from a file.
+    Write N-D binary field to a file.
 
-    Parameters:
-    fnam  : str  - Input path and file name
-    siz   : tuple - Grid dimension (default (360, 224, 46))
-    typ   : int  - 0 for sequential FORTRAN, 1 for plain binary (default)
-    prec  : str  - Numeric precision (default 'float32')
-    skip  : int  - Records to skip before reading (default 0)
-    mform : str  - Machine format (default '<' for little-endian)
-
-    Returns:
-    fld   : np.ndarray - Output array of dimension siz
-
-    Example usage:
-    fld = readbin('data.bin', (360, 224, 46), 1, 'float32', 0, '>')
+    Parameters
+    ----------
+    fnam : str
+        Output file name
+    fld : ndarray
+        Data to write
+    prec : str
+        Precision ('float32', 'float64', ...)
+    endian : str
+        'big' or 'little'
+    skip : int
+        Number of records to skip
+    typ : int
+        1 = plain binary (MITgcm style)
+        0 = sequential FORTRAN (NOT implemented)
     """
 
-    dtype_map = {
-        "int8": np.int8,
-        "int16": np.int16,
-        "int32": np.int32,
-        "int64": np.int64,
-        "uint8": np.uint8,
-        "uint16": np.uint16,
-        "uint32": np.uint32,
-        "uint64": np.uint64,
-        "float32": np.float32,
-        "float64": np.float64,  # doen't exist in python?
-    }
+    if typ != 1:
+        raise NotImplementedError("Sequential FORTRAN (typ=0) not supported")
 
-    dtype = dtype_map.get(prec, np.float32)
-
-    with open(fnam, "rb") as fid:
-        if skip > 0:
-            if typ == 0:
-                for _ in range(skip):
-                    _ = np.fromfile(
-                        fid, dtype=dtype
-                    )  # read_record() matlab function
-            else:
-                reclength = np.prod(siz) * dtype().itemsize
-                fid.seek(skip * reclength, 0)
-
-        if typ == 0:
-            tmp = np.fromfile(
-                fid, dtype=dtype
-            )  # read_record() matlab function
-        else:
-            tmp = np.fromfile(fid, dtype=dtype, count=np.prod(siz))
-
-    fld = tmp.reshape(siz)
-    return fld
-
-
-def nodal(MJD, tide_num):
-    """
-    function to compute nodal corrections for tidal constituents
-    USAGE:
-    [pu,pf,G]=nodal(MJD,tide_num)
-    PARAMETERS:
-    MJD: Modified Julian Date
-    tide_num: list of tidal constituents
-    OUTPUT:
-    pu, pf: nodal corrections for the constituents
-    G: phase correction in degrees
-    """
-    pu, pf, G = pyTMD.arguments.arguments(
-        MJD, tide_num
-    )  # pu in radians and G in degrees
-    return pu, pf, G
-
-
-def writebin(fnam, fld, typ=1, prec="float32", skip=0, mform="big"):
-    """
-    Function to write N-D binary field to a file.
-
-    Parameters:
-        fnam (str): Output file name
-        fld (numpy.ndarray): Input array
-        typ (int): 0 for sequential FORTRAN; 1 for plain binary (default)
-        prec (str): Numeric precision
-        (e.g., 'float32', 'int16', default 'float32')
-        skip (int): Records to skip before writing (default 0)
-        mform (str): Machine format
-        ('big' for big-endian, 'little' for little-endian, default 'big')
-    """
-    if not isinstance(fld, np.ndarray):
-        raise ValueError("Input 'fld' must be a numpy array.")
-
-    # Precision map
+    endian_map = {"big": ">", "little": "<"}
     prec_map = {
         "float32": "f4",
         "float64": "f8",
@@ -818,194 +431,64 @@ def writebin(fnam, fld, typ=1, prec="float32", skip=0, mform="big"):
         "int64": "i8",
     }
 
-    # Determine byte order
-    byte_order = ">" if mform == "big" else "<"
-    dtype_str = byte_order + prec_map[prec]  # e.g., '>f4'
-    dtype = np.dtype(dtype_str)
+    if endian not in endian_map:
+        raise ValueError("endian must be 'big' or 'little'")
+    if prec not in prec_map:
+        raise ValueError(f"Unsupported precision: {prec}")
 
-    # Open file for appending or creating
-    if os.path.exists(fnam):
-        mode = "r+b"
-    else:
-        mode = "wb"
+    dtype = np.dtype(endian_map[endian] + prec_map[prec])
+    fld = np.asarray(fld, dtype=dtype)
+
+    mode = "r+b" if os.path.exists(fnam) else "wb"
 
     with open(fnam, mode) as f:
-        if skip > 0 and typ == 0:
-            raise NotImplementedError(
-                "Skipping records is not implemented for type 0."
-            )
-
-        if typ == 1:  # Plain binary
-            if skip > 0:
-                # Calculate record size
-                record_size = fld.size * dtype.itemsize
-                f.seek(skip * record_size, os.SEEK_SET)
-
-            # Write the array in the specified precision
-            f.write(fld.astype(dtype).tobytes())
-
-        elif typ == 0:  # Sequential FORTRAN binary
-            # Custom implementation needed here
-            # (depending on specific requirements)
-            raise NotImplementedError(
-                "Sequential FORTRAN type (typ=0) not implemented."
-            )
-
-    print(f"Data written successfully to {fnam}.")
-
-    # Test the usage of create_tide_bc_4bdry.py
+        if skip > 0:
+            f.seek(skip * fld.size * dtype.itemsize, 0)
+        f.write(fld.tobytes())
 
 
-def inspect_func(args):
-    if args.check_b in args.boundary:
-        print("inspecting boundary", args.check_b)
-        # bdry_file = args.path+f'bdry_grid_{args.check_b}.npy'
-        bdry_file = f"data_am_all_{args.check_b}.npy"
-        bdry_file_ph = f"data_ph_all_{args.check_b}.npy"
-        data = np.load(bdry_file, allow_pickle=True)
-        data_ph = np.load(bdry_file_ph, allow_pickle=True)
-        confronto = np.loadtxt("tides_confronto_" + args.check_b + ".dat")
-        print("load data for comparison\n")
-        print("amp\n [m2, s2, n2, k2, k1, o1, p1, q1]\n", data[0])
-        print(
-            "confronto amp\n[m2, s2, n2, k2, k1, o1, p1, q1]\n",
-            confronto[0, 2:10],
-        )
-
-        print("pha\n [m2, s2, n2, k2, k1, o1, p1, q1]\n", data_ph[0])
-        print(
-            "confronto pha\n[m2, s2, n2, k2, k1, o1, p1, q1]\n",
-            confronto[0, 10:],
-        )
-        print("\n----------------------------------------------------------\n")
-        print("amp\n [m2, s2, n2, k2, k1, o1, p1, q1]\n", data[:-1])
-        print(
-            "confronto amp\n[m2, s2, n2, k2, k1, o1, p1, q1]\n",
-            confronto[:-1, 2:10],
-        )
-        print("pha\n [m2, s2, n2, k2, k1, o1, p1, q1]\n", data_ph[:-1])
-        print(
-            "confronto pha\n[m2, s2, n2, k2, k1, o1, p1, q1]\n",
-            confronto[:-1, 10:],
-        )
-        print("\n---------------------------------------------------------\n")
-
-        print(data.shape, data_ph.shape, confronto.shape)
-        plt.figure()
-        if args.check_b == "s" or args.check_b == "n":
-            conf_x = confronto[:, 1]
-            # data_x = data[:,1]
-        else:
-            conf_x = confronto[:, 0]
-            # data_x = data[:,0]
-        prefix = ["matlab", "pyTMD "]
-
-        label_matlab = [prefix[0] + item for item in args.constituents]
-        label_pyTMD = [prefix[1] + item for item in args.constituents]
-        colors = ["b", "g", "r", "c", "m", "y", "k", "orange"]
-
-        for i, cons in enumerate(args.constituents):
-            print(i, cons)
-            plt.plot(
-                conf_x,
-                confronto[:, i + 2],
-                label=label_matlab[i],
-                color=colors[i],
-                linestyle="--",
-            )
-            plt.plot(
-                conf_x,
-                data[:, i],
-                label=label_pyTMD[i],
-                color=colors[i],
-                linestyle="-",
-            )
-            print(
-                "plot",
-                cons,
-                "matlab",
-                np.max(confronto[:, i + 2]),
-                "pyTMD",
-                np.max(data[:, i]),
-            )
-        plt.title("Amplitude Comparison - matlab vs Python")
-        plt.xlabel("Longitude" if args.check_b in ["w", "e"] else "Latitude")
-        plt.ylabel("amp all [m]")
-        if args.check_b in ["w"]:
-            x1 = conf_x[0]
-            x2 = conf_x[-28]
-            plt.xlim(x1, x2)
-        plt.legend(fontsize="x-small", loc="upper left")
-        plt.grid(True)
-        plt.savefig(
-            "figure_amplitude_comparison_" + args.check_b + ".png", dpi=300
-        )
-
-        plt.figure()
-        for i, cons in enumerate(args.constituents):
-            plt.plot(
-                conf_x,
-                confronto[:, i + 10],
-                label=label_matlab[i],
-                color=colors[i],
-                linestyle="--",
-            )
-            plt.plot(
-                conf_x,
-                data_ph[:, i],
-                label=label_pyTMD[i],
-                color=colors[i],
-                linestyle="-",
-            )
-        plt.title("Phase lag Comparison - matlab vs Python")
-        plt.xlabel("Longitude" if args.check_b in ["w", "e"] else "Latitude")
-        plt.ylabel("phase all [s]")
-        if args.check_b in ["w"]:
-            plt.xlim(x1, x2)
-        plt.legend(fontsize="x-small", loc="lower left")
-        plt.grid(True)
-        plt.savefig(
-            "figure_phase_comparison_" + args.check_b + ".png", dpi=300
-        )
-
-    return True
-
-
-def main(path, path_tides, tide_model, tide_constituents, boundary, grid, dbg):
+def main(path_results, path_tides, tide_model, constituents, boundaries, grid_dims, endianess):
     print("\n-----------------------------------------------------")
-    print(f"📁 Working path:    {path}")
-    print(f"📁 Tide model:      {tide_model}")
-    print(f"📋 Constituents:    {tide_constituents}")
-    print(f"📋 Boundaries:      {boundary}")
-    print(f"📋 Grid pointss:    {grid}")
+    print(f"Results path:          {path_results}")
+    print(f"Tidal hc data path:    {path_tides}")
+    print(f"Tidal model of hc data:{tide_model}")
+    print(f"Constituents:          {constituents}")
+    print(f"Boundaries:            {boundaries}")
+    print(f"Grid dimensions:       {grid_dims}")
+    print(f"MITgcm data endianess: {endianess}")
     print("\n-----------------------------------------------------")
-    print("\nCreating Tidal BC")
+    print("\nCreating MITgcm Tidal BC")
 
     # Time for nodal correction
     time_nodal = dt(1979, 1, 1, 0, 0, 0)
     print("Nodal time", time_nodal, julian.to_jd(time_nodal, fmt="jd"))
 
     bnd_list = ["n", "s", "w", "e"]
-    cbdry_empty = [c for c in bnd_list if c not in boundary]
+    cbdry_empty = [c for c in bnd_list if c not in boundaries]
+    grid_dims = list(map(int, grid_dims))
+
+    path_results = Path(path_results).expanduser().resolve()
+    path_tides = Path(path_tides).expanduser().resolve()
 
     # check empty lists
-    if boundary:
-        print("Domain sides", boundary, "with constituents", tide_constituents)
+    if boundaries:
+        print("Domain sides", boundaries, "with constituents", constituents)
         create_tide_bc_second(
-            path,
-            grid,
-            boundary,
-            tide_constituents,
-            time_nodal,
+            path_results,
             path_tides,
             tide_model,
-            dbg,
+            constituents,
+            boundaries,
+            grid_dims,
+            time_nodal,
+            endianess,
         )
+
     if cbdry_empty:
         # Create a dummy boundary condition file for eastern
         # and northern boundary
         print("Empty boundaries", cbdry_empty)
-        tide_bc_empty(grid, cbdry_empty, tide_constituents)
+        tide_bc_empty(grid_dims, cbdry_empty, constituents, path_results, endianess)
 
 
 if __name__ == "__main__":
@@ -1023,79 +506,57 @@ if __name__ == "__main__":
     )
     subparsers = parser.add_subparsers(title="subcommand", dest="subcommand")
     parser.add_argument(
-        "--path",
-        default=default_config.get(
-            "path", "/g100_work/OGS23_PRACE_IT/apetroni/tides/"
-        ),
+        "--path_results",
+        default=default_config.get("path_results"),
         help=(
-            "path to tide MITgcm grid boundary\
-            (default: /g100_work/OGS23_PRACE_IT/apetroni/tides/)"
+            "path to the folder where results are saved and where the results of\
+            set_bc_grid have been saved"
         ),
     )
     parser.add_argument(
-        "--path_tides",
-        default=default_config.get(
-            "path_tides", "/g100_work/OGS23_PRACE_IT/apetroni/envPy/TIDES/"
-        ),
-        help=(
-            "path to tide model (default:\
-            'g100_work/OGS23_PRACE_IT/apetroni/envPy/TIDES/')"
-        ),
+        "--path_tide_hc_data",
+        default=default_config.get("path_tide_hc_data"),
+        help=("path to the folder containing tide hc data"),
     )
     parser.add_argument(
-        "--tide",
-        default=default_config.get("tide", "TPXO10-atlas-v2"),
-        help="path to tide model (default: 'TPXO10-atlas-v2')",
+        "--tide_model",
+        default=default_config.get("tide_model"),
+        help=("name of the tide model"),
     )
 
     parser.add_argument(
         "--constituents",
         nargs="+",  # accetta una lista di valori separati da spazio
-        default=default_config.get(
-            "constituents", ["m2", "s2", "n2", "k2", "k1", "o1", "p1", "q1"]
-        ),
-        help=(
-            "Constituent list (default:['m2', 's2', 'n2', 'k2', 'k1',\
-            'o1', 'p1', 'q1'])"
-        ),
+        default=default_config.get("constituents"),
+        help=("Constituent list"),
     )
     parser.add_argument(
-        "--boundary",
+        "--boundaries",
         nargs="+",  # accetta una lista di valori separati da spazio
-        default=default_config.get("boundary", ["s"]),
-        help="Constituent list (default: ['w'])",
-        # Complete list boundaries ['n', 's', 'e', 'w']
+        default=default_config.get("boundaries"),
+        help=("Boundary list where tides have to be added"),
     )
     parser.add_argument(
-        "--grid",
+        "--grid_dims",
         nargs="+",  # accetta una lista di valori separati da spazio
-        default=default_config.get("grid", [320, 128, 50]),
-        help="grid points nx, ny (default: [320,128,50])",
+        default=default_config.get("grid_dims"),
+        help="number of grid points in each dimension (longitude, latitude, depth): nx, ny, nz",
     )
     parser.add_argument(
-        "--debug",
-        action="store_true",
-        default=default_config.get("debug", False),
-        help="Enable debug mode (default: False)",
+        "--binary_data_endianess",
+        default=default_config.get("binary_data_endianess"),
+        help="MITgcm binary data endianess",
     )
-    # Subcomando: inspect
-    parser_inspect = subparsers.add_parser("inspect", help="print fiel obcs")
-    parser_inspect.add_argument(
-        "check_b", help="print on screen the values of the boundary"
-    )
-    parser_inspect.set_defaults(func=inspect_func)
+
 
     args = parser.parse_args()
-    # logic to executing only the inspection
-    if args.subcommand:
-        args.func(args)
-    else:
-        main(
-            args.path,
-            args.path_tides,
-            args.tide,
-            args.constituents,
-            args.boundary,
-            args.grid,
-            args.debug,
-        )
+
+    main(
+        args.path_results,
+        args.path_tide_hc_data,
+        args.tide_model,
+        args.constituents,
+        args.boundaries,
+        args.grid_dims,
+        args.binary_data_endianess,
+    )

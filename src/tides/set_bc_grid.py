@@ -1,75 +1,99 @@
 import argparse
 import json
 from pathlib import Path
-
 import numpy as np
-import scipy.io as sio
-
-# I put the fuinctions below
-# from readbin import readbin
-# create_bc_grid
 
 
-def create_bc_grid(path, dir_in, grid, cbdry):
+def create_bc_grid(path_results, path_grid, cbdry, grid_dims, endian_val):
     """
-    Input:  dir_in, directory that has MITgcm grid files
+    Input:
+     path_results, directory where results are saved
+     path_grid, directory of MITgcm grid files
      (following files are expected,
       YC.data. XC.data, hFacC.data
       RF.data, AngleCS.data, AngleSN.data )
+      cbdry, character for bdry to generate: s, n, w, e,
+      (south, north, west, east)
+      grid_dims:
       nx, first dimension of MITgcm grid, (west-east)
       ny, second  dimension of MITgcm grid (south-north)
       nz, dimension in z (or r)  direction
-      cbdry, character for bdry to generate: s, n, w, e,
-      (south, north, west, east)
-    Output: No output
-    The script will generate a grid file named bdry_grid_[snwe].mat
+    Output:
+    The script will generate a grid file named bdry_grid_[snwe].npy and will save
+    it in path_results
     """
-    path_grid = path
-    nx = grid[0]
-    ny = grid[1]
-    nz = grid[2]
+
+    # path_results= "/home/sgaliana/ShareMER_tides/Resulting_NWMed_tide_files/"
+    # path_results = Path(path_results).expanduser().resolve()
+    # path_grid= "/home/sgaliana/ShareMER_tides/MITgcm_NWMed_grid/"
+    # path_grid = Path(path_grid).expanduser().resolve()
+    # cbdry="s"
+    # grid_dims= [850,664,61]
+    # endian_val="little"
+
+    nx = grid_dims[0]
+    ny = grid_dims[1]
+    nz = grid_dims[2]
     debug = False
     debug2 = True
     # Default location of boundary
-    ny_north = ny - 1
+    ny_north = ny-1
     ny_south = 0
     nx_west = 0
-    nx_east = ny - 1
+    nx_east = nx-1
+    cbdry = cbdry.lower() #Enforce lowercase boundary labels
 
     # Read latitude and longitude data
-    lat = readbin(f"{dir_in}/YC.data", (ny, nx))
+    lat = readbin(str(path_grid/ f"YC.data"), (ny, nx), endian=endian_val)
+    if lat.shape != (ny,nx):
+        raise ValueError(f"YC.data shape {lat.shape} != ({ny},{nx})")
     if debug:
         print("lat shape", lat.shape)
         print(lat)
-    lon = readbin(f"{dir_in}/XC.data", (ny, nx))
+
+    lon = readbin(str(path_grid / f"XC.data"), (ny, nx), endian=endian_val)
+    if lon.shape != (ny,nx):
+        raise ValueError(f"XC.data shape {lon.shape} != ({ny},{nx})")
     if debug:
         print("lon shape", lon.shape)
+
     # Read RF data and calculate thickness
-    rf = -readbin(f"{dir_in}/RF.data", (nz + 1))
+    rf = -readbin(str(path_grid / f"RF.data"), (nz + 1), endian=endian_val)
+    if rf.shape != (nz+1,):
+        raise ValueError(f"RF.data shape {rf.shape} != ({nz+1})")
+
     thk = np.diff(rf)  # thickness cells
     if debug:
         print("rf shape", rf.shape, "thk", thk.shape)
+
     # Read hFacC data and calculate depth
-    hfac = readbin(f"{dir_in}/hFacC.data", (nz, ny, nx))
-    thk3d = np.zeros_like(hfac)
+    hfac = readbin(str(path_grid / f"hFacC.data"), (nz, ny, nx), endian=endian_val)
+    if hfac.shape != (nz,ny,nx):
+        raise ValueError(f"hFacC.data shape {hfac.shape} != ({nz},{ny},{nx})")
 
-    for k in range(nz):
-        temp1 = hfac[k, :, :]
-        thk3d[k, :, :] = thk[k] * temp1
-    depth = np.sum(thk3d, axis=0)
 
-    # Initialize AngleCS and AngleSN
-    AngleCS = np.ones((ny, nx))
-    AngleSN = np.zeros((ny, nx))
+    # thk3d = np.zeros_like(hfac)
+    # for k in range(nz):
+    #     temp1 = hfac[k, :, :]
+    #     thk3d[k, :, :] = thk[k] * temp1
+    depth = np.sum(hfac*thk[:, None, None], axis=0)
+
+    # # Initialize AngleCS and AngleSN
+    # AngleCS = np.ones((ny, nx))
+    # AngleSN = np.zeros((ny, nx))
 
     try:
-        AngleCS = readbin(f"{dir_in}/AnglesCS.data", (ny, nx))
+        AngleCS = readbin(str(path_grid / f"AngleCS.data"), (ny, nx), endian=endian_val)
     except FileNotFoundError:
-        print("AngleCS file not found")
+        AngleCS = np.ones((ny, nx))
+        print("AngleCS file not found. Generating a {ny,nx} ones array")
+
     try:
-        AngleSN = readbin(f"{dir_in}/AnglesSN.data", (ny, nx))
+        AngleSN = readbin(str(path_grid / f"AngleSN.data"), (ny, nx), endian=endian_val)
     except FileNotFoundError:
-        print("AngleSN file not found")
+        AngleSN = np.zeros((ny, nx))
+        print("AngleSN file not found. Generating a {ny,nx} zeros array")
+
 
     # Determine boundary based on cbdry
     if cbdry == "s":
@@ -104,44 +128,29 @@ def create_bc_grid(path, dir_in, grid, cbdry):
         print(f"No such selection: {cbdry}")
         return
 
-    # Save boundary data to a .mat or python file
-    mat = False
-    if mat:
-        bdry_file = f"bdry_grid_{cbdry}.mat"
-        sio.savemat(
-            bdry_file,
-            {
-                "lat_bc": lat_bc,
-                "lon_bc": lon_bc,
-                "depth_bc": depth_bc,
-                "AngleCS_bc": AngleCS_bc,
-                "AngleSN_bc": AngleSN_bc,
-            },
-        )
-    else:
-        bdry_file = f"bdry_grid_{cbdry}.npy"
-        data = {
-            "lat_bc": lat_bc,
-            "lon_bc": lon_bc,
-            "depth_bc": depth_bc,
-            "AngleCS_bc": AngleCS_bc,
-            "AngleSN_bc": AngleSN_bc,
-        }
-        np.save(path_grid + bdry_file, data)
-        print(bdry_file, "file saved in ", path_grid)
-        if debug2:
-            loaded_array = np.load(
-                path_grid + "bdry_grid_" + cbdry + ".npy", allow_pickle=True
-            ).item()
-            for name, arr in loaded_array.items():
-                print("loaded_array:\n", name, arr.shape)
-            # or_mat_file = sio.loadmat(path_grid + "bdry_grid_"+cbdry+".mat")
+    # Save boundary data to a python file
+
+    bdry_file = f"bdry_grid_{cbdry}.npy"
+    data = {
+    "lat_bc": lat_bc,
+    "lon_bc": lon_bc,
+    "depth_bc": depth_bc,
+    "AngleCS_bc": AngleCS_bc,
+    "AngleSN_bc": AngleSN_bc,
+    }
+    np.save(path_results / bdry_file, data)
+    print(bdry_file, "file saved in ", str(path_results))
+    if debug2:
+        loaded_array = np.load(
+            path_results / bdry_file, allow_pickle=True
+        ).item()
+    for name, arr in loaded_array.items():
+        print("loaded_array:\n", name, arr.shape)
+    # or_mat_file = sio.loadmat(path_grid + "bdry_grid_"+cbdry+".mat")
     return
 
 
-def readbin(
-    fnam, siz=(360, 224, 46), typ=1, prec="float32", skip=0, mform="<"
-):
+def readbin(fnam, siz=(850, 664, 61), typ=1, prec="float32", skip=0, endian="big"):
     """
     Function to read N-D binary field from a file.
 
@@ -157,7 +166,7 @@ def readbin(
     fld   : np.ndarray - Output array of dimension siz
 
     Example usage:
-    fld = readbin('data.bin', (360, 224, 46), 1, 'float32', 0, '>')
+    fld = readbin('data.bin', (360, 224, 46), 1, 'float32', 0, 'big')
     """
 
     dtype_map = {
@@ -170,10 +179,11 @@ def readbin(
         "uint32": np.uint32,
         "uint64": np.uint64,
         "float32": np.float32,
-        "float64": np.float64,  # doen't exist in python?
+        "float64": np.float64,
     }
 
     dtype = dtype_map.get(prec, np.float32)
+    endian_map = {"big": ">", "little": "<"}
 
     with open(fnam, "rb") as fid:
         if skip > 0:
@@ -197,22 +207,26 @@ def readbin(
     return fld
 
 
-def main(grid, boundary, path, path_grid):
+def main(path_results, path_grid, boundaries, grid_dims, endian):
     # the script to generate bc grid files
-    # which boundary
-    bc_list = boundary
+
     # Grid
-    nx = grid[0]
-    ny = grid[1]
-    nz = grid[2]
+    grid_dims = list(map(int, grid_dims))
+    nx = grid_dims[0]
+    ny = grid_dims[1]
+    nz = grid_dims[2]
     print("Generating grid BC files, \n the grid size: ", nx, ny, nz)
-    dir_in = path_grid
-    print("From: \n ", dir_in)
 
-    for cbdry in bc_list:
-        create_bc_grid(path, dir_in, grid, cbdry)
+    print("From: \n ", path_grid)
+
+    path_results = Path(path_results).expanduser().resolve()
+    path_grid = Path(path_grid).expanduser().resolve()
+
+    path_results.mkdir(parents=True, exist_ok=True)
+
+    for cbdry in boundaries:
+        create_bc_grid(path_results, path_grid, cbdry, grid_dims, endian)
         print(cbdry, "boundary created")
-
 
 if __name__ == "__main__":
     # load default values from JSON (if exists)
@@ -231,38 +245,33 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--path",
-        default=default_config.get(
-            "path", "/g100_work/OGS23_PRACE_IT/apetroni/tides/"
-        ),
-        help=(
-            "path to tide MITgcm grid boundary\
-            (default: /g100_work/OGS23_PRACE_IT/apetroni/tides/)"
-        ),
+        "--path_results",
+        default=default_config.get("path_results"),
+        help="path where results will be saved",
     )
     parser.add_argument(
         "--path_grid",
-        default=default_config.get(
-            "path_grid",
-            "/g100_work/OGS23_PRACE_IT/apetroni/tides/\
-                    grid/run_160p_AZAL_HR_for_grid",
-        ),
-        help="path to mitGCM grid (default:\
-             '/g100_work/OGS23_PRACE_IT/apetroni/tides/\
-             grid/run_160p_AZAL_HR_for_grid')",
+        default=default_config.get("path_grid"),
+        help="path to MITgcm grid",
     )
     parser.add_argument(
-        "--boundary",
+        "--boundaries",
         nargs="+",  # accetta una lista di valori separati da spazio
-        default=default_config.get("boundary", ["s"]),
-        help="Constituent list (default: ['w'])",
+        default=default_config.get("boundaries"),
+        help="Boundaries where tides are implemented",
         # Complete list boundaries ['n', 's', 'e', 'w']
     )
     parser.add_argument(
-        "--grid",
-        nargs="+",  # accetta una lista di valori separati da spazio
-        default=default_config.get("grid", [320, 12, 50]),
-        help="grid points nx, ny (default: [320,128,50])",
+        "--grid_dims",
+        nargs="+", # accetta una lista di valori separati da spazio
+        default=default_config.get("grid_dims"),
+        help="grid dimensions [nx, ny, nz]",
     )
+    parser.add_argument(
+        "--binary_data_endianess",
+        default=default_config.get("binary_data_endianess"),
+        help="MITgcm binary data endianess",
+    )
+
     args = parser.parse_args()
-    main(args.path, args.boundary, args.path, args.path_grid)
+    main(args.path_results, args.path_grid, args.boundaries, args.grid_dims, args.binary_data_endianess)
