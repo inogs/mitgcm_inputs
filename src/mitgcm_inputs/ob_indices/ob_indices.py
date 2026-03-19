@@ -121,7 +121,7 @@ def generate_ob_indices(
             open_on_boundary = 1
         else:
             # Here we add a +1 because we need to skip the depth index
-            open_on_boundary = mask.shape[domain_index + 1]
+            open_on_boundary = mask.shape[sponge_index + 1]
         # This is the value that we use to report that a cell is closed on the
         # boundary
         closed_cell = 0
