@@ -178,6 +178,9 @@ def generate_ob_indices(
             side,
         )
 
+        # In the nudging indices, the only allowed indices are 0 and 1
+        nudging_cells = np.where(sponge_cells == closed_cell, 0, 1)
+
         open_bc_cells = np.copy(sponge_cells)
         for river in rivers_positions:
             if river["model"] != "stem_flux":
@@ -205,7 +208,7 @@ def generate_ob_indices(
         ob_indices += "\n"
 
         ob_sponge += f"nudgOB_{direction_char}{side}="
-        for i in rewrite_in_mitgcm_format(sponge_cells):
+        for i in rewrite_in_mitgcm_format(nudging_cells):
             ob_sponge += f"{i[0]}*{i[1]},"
         ob_sponge += "\n"
 
