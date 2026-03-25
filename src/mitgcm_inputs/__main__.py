@@ -14,6 +14,9 @@ from bitsea.utilities.argparse_types import path_inside_an_existing_dir
 from mitgcm_inputs.bottom_fluxes import COMMAND_NAME as BFLUX_COMMAND_NAME
 from mitgcm_inputs.bottom_fluxes import main as bflux_main
 from mitgcm_inputs.bottom_fluxes import sub_arguments as bflux_sub_arguments
+from mitgcm_inputs.cosmetic_mask import COMMAND_NAME as CMASK_COMMAND_NAME
+from mitgcm_inputs.cosmetic_mask import main as cosmetic_mask_main
+from mitgcm_inputs.cosmetic_mask import sub_arguments as cmask_sub_arguments
 from mitgcm_inputs.k_extinction import COMMAND_NAME as KEXT_COMMAND_NAME
 from mitgcm_inputs.k_extinction import main as kext_main
 from mitgcm_inputs.k_extinction import sub_arguments as kext_sub_arguments
@@ -76,6 +79,7 @@ def argument(sys_argv=None):
     bflux_sub_arguments(subparsers)
     rbcs_sub_arguments(subparsers)
     ob_indices_sub_arguments(subparsers)
+    cmask_sub_arguments(subparsers)
 
     subparser = subparsers.add_parser(
         "FLUXES",
@@ -107,7 +111,7 @@ def argument(sys_argv=None):
         return parser.parse_args()
 
 
-def execute_all_commands(args: argparse.Namespace):
+def execute_flux_commands(args: argparse.Namespace):
     mask_path = args.mask
     output_file = args.output
 
@@ -183,11 +187,12 @@ def execute_all_commands(args: argparse.Namespace):
 
 CMD_MAP = {
     BFLUX_COMMAND_NAME: bflux_main,
+    CMASK_COMMAND_NAME: cosmetic_mask_main,
     SD_COMMAND_NAME: sd_main,
     KEXT_COMMAND_NAME: kext_main,
     RBCS_COMMAND_NAME: rbcs_main,
     OB_INDICES_COMMAND_NAME: ob_indices_main,
-    "FLUXES": execute_all_commands,
+    "FLUXES": execute_flux_commands,
 }
 
 

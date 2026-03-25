@@ -63,6 +63,14 @@ process_domain () {
         if [ -f "${rcustom}" ]; then
             rbcs_options="${rbcs_options} -d ${rcustom}"
         fi
+
+        # If there are rivers we also build the cosmetic mask
+        poetry run mitgcm_inputs cosmetic_mask -m "${domaindir}/meshmask.nc" \
+            -r "${domaindir}/additional_variables.nc" \
+            -o "${domaindir}/cmeshmask.nc" --mer
+    else
+        # No rivers? Then the cosmetic mask is equal to the original mask
+        cp -av "${domaindir}/meshmask.nc" "${domaindir}/cmeshmask.nc"
     fi
 
     poetry run mitgcm_inputs ob_indices \
