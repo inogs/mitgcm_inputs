@@ -43,8 +43,8 @@ def sub_arguments(subparser):
         "river cell with its river id. This file is useful only if this "
         "information is not already stored in the meshmask file and if there "
         "are rivers on the domain. If the rivers-positions file is not "
-        "provided, we will assume that there are no rivers on the domain "
-        "and this file is simply ignored",
+        "provided, we will assume that the information about the rivers is "
+        'stored inside the meshmask file (in a variable named "rivers")',
     )
 
     parser.add_argument(
