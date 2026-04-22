@@ -113,7 +113,9 @@ def main(args: argparse.Namespace) -> int:
 
     # If there are rivers in this domain
     if args.rivers_positions is not None:
-        with xr.open_dataset(file_with_river) as river_ds:
+        with xr.open_dataset(
+            file_with_river, mask_and_scale=False
+        ) as river_ds:
             river_map = river_ds["rivers"].load()
 
         river_mask = MaskWithRivers(
