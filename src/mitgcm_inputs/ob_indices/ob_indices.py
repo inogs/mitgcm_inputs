@@ -126,7 +126,7 @@ def generate_ob_indices(
         # boundary
         closed_cell = 0
 
-        LOGGER.debug("Cutting %i cells from the %s", cut_cells, side)
+        LOGGER.debug("Reading %i cells from the %s", cut_cells, side)
         current_side = cut_at_side(mask.get_sea_cells(), side, cut_cells)
 
         # We only take into account the surface
