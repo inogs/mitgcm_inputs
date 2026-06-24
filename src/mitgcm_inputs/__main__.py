@@ -17,6 +17,9 @@ from mitgcm_inputs.bottom_fluxes import sub_arguments as bflux_sub_arguments
 from mitgcm_inputs.cosmetic_mask import COMMAND_NAME as CMASK_COMMAND_NAME
 from mitgcm_inputs.cosmetic_mask import main as cosmetic_mask_main
 from mitgcm_inputs.cosmetic_mask import sub_arguments as cmask_sub_arguments
+from mitgcm_inputs.exf_albedo import COMMAND_NAME as EXF_ALBEDO_COMMAND_NAME
+from mitgcm_inputs.exf_albedo import main as exf_albedo_main
+from mitgcm_inputs.exf_albedo import sub_arguments as exf_albedo_sub_arguments
 from mitgcm_inputs.k_extinction import COMMAND_NAME as KEXT_COMMAND_NAME
 from mitgcm_inputs.k_extinction import main as kext_main
 from mitgcm_inputs.k_extinction import sub_arguments as kext_sub_arguments
@@ -81,6 +84,7 @@ def argument(sys_argv=None):
     rbcs_sub_arguments(subparsers)
     ob_indices_sub_arguments(subparsers)
     cmask_sub_arguments(subparsers)
+    exf_albedo_sub_arguments(subparsers)
 
     subparser = subparsers.add_parser(
         "FLUXES",
@@ -193,6 +197,7 @@ CMD_MAP = {
     KEXT_COMMAND_NAME: kext_main,
     RBCS_COMMAND_NAME: rbcs_main,
     OB_INDICES_COMMAND_NAME: ob_indices_main,
+    EXF_ALBEDO_COMMAND_NAME: exf_albedo_main,
     "FLUXES": execute_flux_commands,
 }
 
