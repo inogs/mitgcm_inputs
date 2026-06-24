@@ -34,7 +34,7 @@ def compute_k_extinction(
     LOGGER.debug("Meshmask shape: %s", meshmask.shape)
 
     LOGGER.debug("Reading data file: %s", data_file)
-    climatological_data = xr.load_dataset(data_file)
+    climatological_data = xr.load_dataset(data_file, engine="netcdf4")
 
     data_lon_min = np.min(climatological_data.longitude.values)
     data_lon_max = np.max(climatological_data.longitude.values)

@@ -48,7 +48,7 @@ def main(args: argparse.Namespace) -> int:
         return 1
 
     LOGGER.debug("Opening file %s", args.mask)
-    with xr.open_dataset(args.mask) as ds:
+    with xr.open_dataset(args.mask, engine="netcdf4") as ds:
         min_lat = float(ds.attrs["domain_minimum_latitude"])
         max_lat = float(ds.attrs["domain_maximum_latitude"])
     LOGGER.debug("Domain latitude range: %s - %s", min_lat, max_lat)

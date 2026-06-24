@@ -83,7 +83,7 @@ def main(args: argparse.Namespace) -> int:
     else:
         file_with_river = args.mask
 
-    with xr.open_dataset(file_with_river) as river_ds:
+    with xr.open_dataset(file_with_river, engine="netcdf4") as river_ds:
         river_map = river_ds["rivers"].load()
 
     river_mask = MaskWithRivers(
