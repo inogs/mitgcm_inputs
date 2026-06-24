@@ -107,7 +107,7 @@ def get_spatial_description_from_mit_static(input_file: Path) -> xr.Dataset:
     Returns:
         A spatial description of our domain
     """
-    with xr.open_dataset(input_file) as ds:
+    with xr.open_dataset(input_file, engine="netcdf4") as ds:
         spatial_description = xr.Dataset(
             data_vars={
                 "bathymetry": (("latitude", "longitude"), ds.Depth.values),

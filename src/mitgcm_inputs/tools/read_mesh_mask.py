@@ -6,7 +6,7 @@ from bitsea.commons.mask import Mask
 
 
 def read_mesh_mask(mask_file_path: Path):
-    with xr.open_dataset(mask_file_path) as ds:
+    with xr.open_dataset(mask_file_path, engine="netcdf4") as ds:
         if "mer_mesh_mask_version" not in ds.attrs:
             return Mask.from_file(mask_file_path)
         latitude = ds.latitude.values

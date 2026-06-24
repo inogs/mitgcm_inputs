@@ -114,7 +114,7 @@ def main(args: argparse.Namespace) -> int:
     # If there are rivers in this domain
     if args.rivers_positions is not None:
         with xr.open_dataset(
-            file_with_river, mask_and_scale=False
+            file_with_river, mask_and_scale=False, engine="netcdf4"
         ) as river_ds:
             river_map = river_ds["rivers"].load()
 
