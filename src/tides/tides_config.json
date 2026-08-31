@@ -1,10 +1,12 @@
 {
-  "path_results": "/path/Resulting_NWMed_tide_files/",
-  "path_tide_hc_data": "/path/",
-  "path_grid": "/path/MITgcm_NWMed_grid/",
+  "path_results": "path_to_results/",
+  "path_tide_hc_data": "path_to_tpxo_atlas_data",
+  "path_grid": "path_to_MITgcm_grid",
   "tide_model": "TPXO10-atlas-v2",
   "constituents":["m2", "s2", "n2", "k2", "k1", "o1", "p1", "q1"],
-  "boundaries":["s", "e"],
-  "grid_dims":[850,664,61],
+  "boundaries":["s", "w"],
+  "grid_dims":[80,80,16],
+  "nodal_flag":"True",
+  "nodal_datetime":"20260526-00:00:00",
   "binary_data_endianess":"little"
 }
