@@ -158,7 +158,7 @@ def main(path_results, path_grid, boundaries, grid_dims):
 if __name__ == "__main__":
     # load default values from JSON (if exists)
     default_config = {}
-    json_path = "tides_config.json"
+    json_path = "tides_config_new.json"
     if Path(json_path).exists():
         with open(json_path) as f:
             default_config = json.load(f)
