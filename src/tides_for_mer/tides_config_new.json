@@ -1,11 +1,12 @@
 {
-  "path_results": "/path_to_results/",
-  "path_tide_hc_data": "/path_to_TPXO_atlas/",
-  "path_grid": "path_to_MITgcm_grid/",
+  "path_results_static": "/path/SIC/Static_Results_SIC/",
+  "path_results_for_MITgcm": "/path/SIC/Results_for_MITgcm_SIC_DATEPLACEHOLDER",
+  "path_tide_hc_data": "/path_TPXO_data/",
+  "path_grid": "/path/MER/Domain_static_data/SIC/",
   "tide_model": "TPXO10-atlas-v2",
   "constituents":["m2", "s2", "n2", "k2", "k1", "o1", "p1", "q1"],
-  "boundaries":["s", "w"],
-  "grid_dims":[80,80,16],
-  "corrections_datetime":"20260526-00:00:00",
+  "boundaries":["s", "n", "e", "w"],
+  "grid_dims":[920,720,99],
+  "corrections_datetime":"DATEPLACEHOLDER-00:00:00",
   "binary_data_endianess":"little"
 }

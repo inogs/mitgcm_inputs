@@ -5,10 +5,10 @@ import numpy as np
 import xarray as xr
 
 
-def create_bc_grid(path_results, path_grid, cbdry, grid_dims):
+def create_bc_grid(path_results_static, path_grid, cbdry, grid_dims):
     """
     Input:
-     path_results, directory where results are saved
+     path_results_static, directory where results are saved
      path_grid, path to MIT_static.nc file or directory containing it
      cbdry, character for bdry to generate: s, n, w, e,
       (south, north, west, east)
@@ -18,7 +18,7 @@ def create_bc_grid(path_results, path_grid, cbdry, grid_dims):
       nz, dimension in z (or r)  direction
     Output:
     The script will generate a grid file named bdry_grid_[snwe].npy and will save
-    it in path_results
+    it in path_results_static
     """
 
     nx = grid_dims[0]
@@ -123,18 +123,18 @@ def create_bc_grid(path_results, path_grid, cbdry, grid_dims):
         "AngleCS_bc": AngleCS_bc,
         "AngleSN_bc": AngleSN_bc,
     }
-    np.save(path_results / bdry_file, data)
-    print(bdry_file, "file saved in ", str(path_results))
+    np.save(path_results_static / bdry_file, data)
+    print(bdry_file, "file saved in ", str(path_results_static))
     if debug2:
         loaded_array = np.load(
-            path_results / bdry_file, allow_pickle=True
+            path_results_static / bdry_file, allow_pickle=True
         ).item()
         for name, arr in loaded_array.items():
             print("loaded_array:\n", name, arr.shape)
     return
 
 
-def main(path_results, path_grid, boundaries, grid_dims):
+def main(path_results_static, path_grid, boundaries, grid_dims):
     # the script to generate bc grid files
 
     # Grid
@@ -146,13 +146,13 @@ def main(path_results, path_grid, boundaries, grid_dims):
 
     print("From: \n ", path_grid)
 
-    path_results = Path(path_results).expanduser().resolve()
+    path_results_static = Path(path_results_static).expanduser().resolve()
     path_grid = Path(path_grid).expanduser().resolve()
 
-    path_results.mkdir(parents=True, exist_ok=True)
+    path_results_static.mkdir(parents=True, exist_ok=True)
 
     for cbdry in boundaries:
-        create_bc_grid(path_results, path_grid, cbdry, grid_dims)
+        create_bc_grid(path_results_static, path_grid, cbdry, grid_dims)
         print(cbdry, "boundary created")
 
 if __name__ == "__main__":
@@ -172,8 +172,8 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--path_results",
-        default=default_config.get("path_results"),
+        "--path_results_static",
+        default=default_config.get("path_results_static"),
         help="path where results will be saved",
     )
     parser.add_argument(
@@ -196,4 +196,4 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    main(args.path_results, args.path_grid, args.boundaries, args.grid_dims)
+    main(args.path_results_static, args.path_grid, args.boundaries, args.grid_dims)

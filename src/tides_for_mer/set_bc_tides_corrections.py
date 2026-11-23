@@ -11,7 +11,8 @@ from scipy.interpolate import interp1d
 
 
 def create_tide_bc(
-    path_results,
+    path_results_static,
+    path_results_for_MITgcm,
     tide_num,
     cbdry_used,
     grid_dims,
@@ -56,7 +57,7 @@ def create_tide_bc(
 
     for c_bdry in cbdry_used:
 
-        bdry_file = path_results / f"bdry_grid_{c_bdry}.npy"
+        bdry_file = path_results_static / f"bdry_grid_{c_bdry}.npy"
 
         data = np.load(bdry_file, allow_pickle=True).item()
 
@@ -81,10 +82,10 @@ def create_tide_bc(
 
         ## Load static tidal signal calculated with set_bc_tides_static
 
-        u_am_st_all_file = path_results / f"data_u_am_st_all_{c_bdry}.npy"
-        u_ph_st_all_deg_file = path_results / f"data_u_ph_st_all_deg_{c_bdry}.npy"
-        v_am_st_all_file = path_results / f"data_v_am_st_all_{c_bdry}.npy"
-        v_ph_st_all_deg_file = path_results / f"data_v_ph_st_all_deg_{c_bdry}.npy"
+        u_am_st_all_file = path_results_static / f"data_u_am_st_all_{c_bdry}.npy"
+        u_ph_st_all_deg_file = path_results_static / f"data_u_ph_st_all_deg_{c_bdry}.npy"
+        v_am_st_all_file = path_results_static / f"data_v_am_st_all_{c_bdry}.npy"
+        v_ph_st_all_deg_file = path_results_static / f"data_v_ph_st_all_deg_{c_bdry}.npy"
 
         u_amp_st = np.load(u_am_st_all_file)
         u_pha_st_deg = np.load(u_ph_st_all_deg_file)
@@ -150,10 +151,6 @@ def create_tide_bc(
             up_c = np.rad2deg(up_c)
             vp_c = np.rad2deg(vp_c)
 
-            # Transform from transports to velocities by dividing by the depth, but set to 0 wherever depth_bc == 0
-            ua_c = np.divide(ua_c, depth_bc, out=np.zeros_like(ua_c), where=(depth_bc != 0))
-            va_c = np.divide(va_c, depth_bc, out=np.zeros_like(va_c), where=(depth_bc != 0))
-
             # Rotate into model grid
             ua_cr, up_cr, va_cr, vp_cr = tide_rot(ua_c, up_c, va_c, vp_c, AngleCS_bc, AngleSN_bc)
 
@@ -199,12 +196,12 @@ def create_tide_bc(
         fname_v_ph_all = "data_v_ph_all_" + c_bdry + ".npy"
         fname_v_ph_all_deg = "data_v_ph_all_deg_" + c_bdry + ".npy"
 
-        np.save(path_results / fname_u_am_all, u_amp_out)
-        np.save(path_results / fname_u_ph_all, u_pha_out_sec)
-        np.save(path_results / fname_u_ph_all_deg, u_pha_out_deg)
-        np.save(path_results / fname_v_am_all, v_amp_out)
-        np.save(path_results / fname_v_ph_all, v_pha_out_sec)
-        np.save(path_results / fname_v_ph_all_deg, v_pha_out_deg)
+        np.save(path_results_for_MITgcm / fname_u_am_all, u_amp_out)
+        np.save(path_results_for_MITgcm / fname_u_ph_all, u_pha_out_sec)
+        np.save(path_results_for_MITgcm / fname_u_ph_all_deg, u_pha_out_deg)
+        np.save(path_results_for_MITgcm / fname_v_am_all, v_amp_out)
+        np.save(path_results_for_MITgcm / fname_v_ph_all, v_pha_out_sec)
+        np.save(path_results_for_MITgcm / fname_v_ph_all_deg, v_pha_out_deg)
 
         vel = ["u", "v"]
         fld = ["Am", "Ph"]
@@ -212,22 +209,22 @@ def create_tide_bc(
         cfld = fld[0]
 
         cvel = vel[0]
-        fnm = path_results / f"OB{boundary}_{cvel}{cfld}.tide_obcs"
+        fnm = path_results_for_MITgcm / f"OB{boundary}_{cvel}{cfld}.tide_obcs"
         writebin(str(fnm), u_amp_out.T, endian=endian_val)
 
         cvel = vel[1]
-        fnm = path_results / f"OB{boundary}_{cvel}{cfld}.tide_obcs"
+        fnm = path_results_for_MITgcm / f"OB{boundary}_{cvel}{cfld}.tide_obcs"
         writebin(str(fnm), v_amp_out.T, endian=endian_val)
 
 
         cfld = fld[1]
 
         cvel = vel[0]
-        fnm = path_results / f"OB{boundary}_{cvel}{cfld}.tide_obcs"
+        fnm = path_results_for_MITgcm / f"OB{boundary}_{cvel}{cfld}.tide_obcs"
         writebin(str(fnm), u_pha_out_sec.T, endian=endian_val)
 
         cvel = vel[1]
-        fnm = path_results / f"OB{boundary}_{cvel}{cfld}.tide_obcs"
+        fnm = path_results_for_MITgcm / f"OB{boundary}_{cvel}{cfld}.tide_obcs"
         writebin(str(fnm), v_pha_out_sec.T, endian=endian_val)
 
     return True
@@ -353,9 +350,10 @@ def writebin(fnam, fld, prec="float32", endian="big", skip=0, typ=1):
         f.write(fld.tobytes())
 
 
-def main(path_results, constituents, boundaries, grid_dims, corrections_datetime, endianess):
+def main(path_results_static, path_results_for_MITgcm, constituents, boundaries, grid_dims, corrections_datetime, endianess):
     print("\n-----------------------------------------------------")
-    print(f"Results path:          {path_results}")
+    print(f"Static results path:          {path_results_static}")
+    print(f"Final results path:          {path_results_for_MITgcm}")
     print(f"Constituents:          {constituents}")
     print(f"Boundaries:            {boundaries}")
     print(f"Grid dimensions:       {grid_dims}")
@@ -371,12 +369,15 @@ def main(path_results, constituents, boundaries, grid_dims, corrections_datetime
 
     grid_dims = list(map(int, grid_dims))
 
-    path_results = Path(path_results).expanduser().resolve()
+    path_results_static = Path(path_results_static).expanduser().resolve()
+
+    path_results_for_MITgcm = Path(path_results_for_MITgcm).expanduser().resolve()
 
 
     print("Domain sides", boundaries, "with constituents", constituents)
     create_tide_bc(
-        path_results,
+        path_results_static,
+        path_results_for_MITgcm,
         constituents,
         boundaries,
         grid_dims,
@@ -400,11 +401,18 @@ if __name__ == "__main__":
     )
     subparsers = parser.add_subparsers(title="subcommand", dest="subcommand")
     parser.add_argument(
-        "--path_results",
-        default=default_config.get("path_results"),
+        "--path_results_static",
+        default=default_config.get("path_results_static"),
         help=(
-            "path to the folder where results are saved and where the results of\
+            "path to the folder where the results of\
             set_bc_grid and set_bc_tides_static have been saved"
+        ),
+    )
+    parser.add_argument(
+        "--path_results_for_MITgcm",
+        default=default_config.get("path_results_for_MITgcm"),
+        help=(
+            "path to the folder where the final results are saved"
         ),
     )
     parser.add_argument(
@@ -440,7 +448,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(
-        args.path_results,
+        args.path_results_static,
+        args.path_results_for_MITgcm,
         args.constituents,
         args.boundaries,
         args.grid_dims,

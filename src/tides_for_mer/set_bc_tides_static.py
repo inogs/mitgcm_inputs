@@ -11,7 +11,7 @@ from scipy.interpolate import interp1d
 
 
 def create_tide_bc_static(
-    path_results,
+    path_results_static,
     path_tides,
     tide_model,
     tide_num,
@@ -50,7 +50,7 @@ def create_tide_bc_static(
 
     for c_bdry in cbdry_used:
 
-        bdry_file = path_results / f"bdry_grid_{c_bdry}.npy"
+        bdry_file = path_results_static / f"bdry_grid_{c_bdry}.npy"
         print(bdry_file)
         data = np.load(bdry_file, allow_pickle=True).item()
         for name, arr in data.items():
@@ -94,19 +94,19 @@ def create_tide_bc_static(
         uamp, upha, conlist0 = model.extract_constants(
             lon_bc,
             lat_bc,
-            type="U",
+            type="u",
             constituents=tide_num,
             method="bilinear",
             extrapolate="linear",
-        )
+        )  # Extracting VELOCITIES in cm/s!!
         vamp, vpha, conlist0 = model.extract_constants(
             lon_bc,
             lat_bc,
-            type="V",
+            type="v",
             constituents=tide_num,
             method="bilinear",
             extrapolate="linear",
-        )
+        )  # Extracting VELOCITIES in cm/s!!
 
         print("Tidal constants extracted in ", c_bdry, " boundary")
 
@@ -139,9 +139,9 @@ def create_tide_bc_static(
             va_c = intp_line_safe(vamp[i,:], coord_1d, depth_bc)
             vp_c = intp_line_safe(vpha[i,:], coord_1d, depth_bc)
 
-            u_amp_st[:,i] = ua_c
+            u_amp_st[:,i] = ua_c/100 # Converting velocities from cm/s to m/s
             u_pha_st_deg[:,i] = up_c
-            v_amp_st[:,i] = va_c
+            v_amp_st[:,i] = va_c/100 # Converting velocities from cm/s to m/s
             v_pha_st_deg[:,i] = vp_c
 
         print("Saving static results for each constitutent")
@@ -154,13 +154,13 @@ def create_tide_bc_static(
         fname_v_am_st_all = "data_v_am_st_all_" + c_bdry + ".npy"
         fname_v_ph_st_all_deg = "data_v_ph_st_all_deg_" + c_bdry + ".npy"
 
-        np.save(path_results / fname_lon, lon_bc)
-        np.save(path_results / fname_lat, lat_bc)
-        np.save(path_results / fname_depth, depth_bc)
-        np.save(path_results / fname_u_am_st_all, u_amp_st)
-        np.save(path_results / fname_u_ph_st_all_deg, u_pha_st_deg)
-        np.save(path_results / fname_v_am_st_all, v_amp_st)
-        np.save(path_results / fname_v_ph_st_all_deg, v_pha_st_deg)
+        np.save(path_results_static / fname_lon, lon_bc)
+        np.save(path_results_static / fname_lat, lat_bc)
+        np.save(path_results_static / fname_depth, depth_bc)
+        np.save(path_results_static / fname_u_am_st_all, u_amp_st)
+        np.save(path_results_static / fname_u_ph_st_all_deg, u_pha_st_deg)
+        np.save(path_results_static / fname_v_am_st_all, v_amp_st)
+        np.save(path_results_static / fname_v_ph_st_all_deg, v_pha_st_deg)
 
     return True
 
@@ -170,7 +170,8 @@ def intp_line_safe(values, coord, depth_bc):
     Fill NaNs along a 1-D boundary line, with special handling for zero depth.
 
     If depth_bc is 0, the corresponding value is forced to 0 without interpolation.
-    Interpolation is performed only for points where depth_bc != 0 and value is NaN.
+    Interpolation is performed only for points where depth_bc != 0 and value is NaN
+    (or equals the fill sentinel 1e20).
 
     Input:
         values:  array, may contain NaN
@@ -180,6 +181,9 @@ def intp_line_safe(values, coord, depth_bc):
         values_int: array without NaN (zeros where depth_bc == 0)
     """
 
+    # Ensure we're working with a float ndarray (needed for masking + isfinite)
+    values = np.asarray(values, dtype=float)
+
     # Make a copy to avoid modifying the original input
     values_int = values.copy()
 
@@ -187,16 +191,20 @@ def intp_line_safe(values, coord, depth_bc):
     zero_depth_mask = (depth_bc == 0)
     values_int[zero_depth_mask] = 0
 
-    # Define masks ONLY for points with non-zero depth
     non_zero_depth_mask = ~zero_depth_mask
 
-    # Among non-zero depth points, find which are good (finite) and bad (NaN/Inf)
-    goodp = np.isfinite(values) & non_zero_depth_mask
-    badp = ~np.isfinite(values) & non_zero_depth_mask
+    # ---- mask definitions ------------------------------------------------
+    # Treat 1e20 (and anything larger in magnitude) as missing, in addition
+    # to NaN / ±Inf.
+    finite   = np.isfinite(values)
+    missing  = ~finite | (np.abs(values) >= 1e19)     # <-- CHANGED
+    goodp    = finite & ~missing & non_zero_depth_mask # <-- CHANGED
+    badp     = missing           & non_zero_depth_mask # <-- CHANGED
+    # ----------------------------------------------------------------------
 
-    # If we don't have at least 2 good points, we cannot interpolate safely.
+    # If we don't have at least 2 distinct coordinates among the good points, we cannot interpolate safely.
     # Fill remaining NaNs (at non-zero depths) with 0 to keep output NaN-free.
-    if np.sum(goodp) < 2:
+    if np.unique(coord[goodp]).size < 2:
         values_int[badp] = 0
         return values_int
 
@@ -213,9 +221,9 @@ def intp_line_safe(values, coord, depth_bc):
     return values_int
 
 
-def main(path_results, path_tides, tide_model, constituents, boundaries, grid_dims):
+def main(path_results_static, path_tides, tide_model, constituents, boundaries, grid_dims):
     print("\n-----------------------------------------------------")
-    print(f"Results path:          {path_results}")
+    print(f"Static results path:          {path_results_static}")
     print(f"Tidal hc data path:    {path_tides}")
     print(f"Tidal model of hc data:{tide_model}")
     print(f"Constituents:          {constituents}")
@@ -226,12 +234,12 @@ def main(path_results, path_tides, tide_model, constituents, boundaries, grid_di
 
     grid_dims = list(map(int, grid_dims))
 
-    path_results = Path(path_results).expanduser().resolve()
+    path_results_static = Path(path_results_static).expanduser().resolve()
     path_tides = Path(path_tides).expanduser().resolve()
 
     print("Domain sides", boundaries, "with constituents", constituents)
     create_tide_bc_static(
-        path_results,
+        path_results_static,
         path_tides,
         tide_model,
         constituents,
@@ -255,8 +263,8 @@ if __name__ == "__main__":
     )
     subparsers = parser.add_subparsers(title="subcommand", dest="subcommand")
     parser.add_argument(
-        "--path_results",
-        default=default_config.get("path_results"),
+        "--path_results_static",
+        default=default_config.get("path_results_static"),
         help=(
             "path to the folder where static results are saved and where the results of\
             set_bc_grid have been saved"
@@ -295,7 +303,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(
-        args.path_results,
+        args.path_results_static,
         args.path_tide_hc_data,
         args.tide_model,
         args.constituents,
