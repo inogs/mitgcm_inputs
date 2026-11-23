@@ -21,7 +21,8 @@ pip install pyTMD==2.2.8
 
    | Key | Description |
    | --- | --- |
-   | `path_results` | Path where the results will be saved. |
+   | `path_results_static` | Path where the static results will be saved. |
+   | `path_results_for_MITgcm` | Path where the final results to force the MITgcm will be saved. |
    | `path_tide_hc_data` | Path to the TPXO10-atlas-v2 atlas. |
    | `path_grid` | Path to the MITgcm grid. The scripts will search for a file named `MIT_static.nc`, which is a MER ST file. |
    | `tide_model` | Version of the tide model in use: `TPXO10-atlas-v2`. |
@@ -31,7 +32,7 @@ pip install pyTMD==2.2.8
    | `corrections_datetime` | Simulation start date and time. Used for the signal corrections. |
    | `binary_data_endianness` | Endianness of the MITgcm binary files produced as output. |
 
-2. Run `set_bc_grid.py` and `set_bc_tides_static.py` for each model domain.
+3. Run `set_bc_grid.py` and `set_bc_tides_static.py` for each model domain.
 
    - **`set_bc_grid.py`** — Generates the boundary grid file from the model grid file (`MIT_static.nc`).
      - If `AngleCS` and/or `AngleSN` are not present in the grid file, they are set to:
@@ -43,7 +44,7 @@ pip install pyTMD==2.2.8
      - The `intp_line_safe` interpolation fills NaNs along the boundary for each constituent, or substitutes them with `0` where `depth_bc = 0` (land).
      - Output: amplitudes and phases of the velocities `u` and `v`, with dimensions `(n_points, n_constituents)` for each open boundary. Here `n_points` is the number of nodes along the boundary — `nx` for boundaries running east–west (longitude direction) or `ny` for boundaries running north–south (latitude direction). Results are saved as `.npy` files.
 
-3. Run `set_bc_tides_corrections.py` for each simulation start time and for each model domain. This script generates the tidal signal for MITgcm by applying corrections to the static data produced by `set_bc_tides_static.py`.
+4. Run `set_bc_tides_corrections.py` for each simulation start time and for each model domain. This script generates the tidal signal for MITgcm by applying corrections to the static data produced by `set_bc_tides_static.py`.
 
    The script:
 
